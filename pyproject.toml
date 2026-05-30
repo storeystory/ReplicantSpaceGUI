@@ -1,0 +1,5 @@
+[project]
+name = "PySide QtQuick Project"
+
+[tool.pyside6-project]
+files = ["ReplicantSpaceGUI/Main.qml", "ReplicantSpaceGUI/mainwindow.ui", "ReplicantSpaceGUI/qmldir", "main.py"]
