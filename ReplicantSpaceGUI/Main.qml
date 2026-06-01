@@ -278,7 +278,7 @@ Window {
                 Item { height: 4 }
                 ActionBtn { label: "[ TRANSFER… ]"; Layout.fillWidth: true; onActivated: transferDialog.open() }
                 Item { height: 4 }
-                ActionBtn { label: "[ TRADE… ]"; Layout.fillWidth: true; onActivated: tradeDialog.open() }
+                ActionBtn { label: "[ TRADE ]"; Layout.fillWidth: true; onActivated: { centerPanel.activeTab = "trade"; backend.fetchTraders() } }
                 Item { height: 4 }
                 ActionBtn { label: "[ PRINT… ]"; Layout.fillWidth: true; onActivated: printDialog.open() }
 
@@ -405,10 +405,28 @@ Window {
                         onActivated: { centerPanel.activeTab = "inventory"; backend.fetchInventory() }
                     }
                     ActionBtn {
+                        label: centerPanel.activeTab === "trade" ? "[ TRADE ]" : "  TRADE  "
+                        height: 24
+                        width: 90
+                        onActivated: { centerPanel.activeTab = "trade"; backend.fetchTraders() }
+                    }
+                    ActionBtn {
                         label: centerPanel.activeTab === "survey" ? "[ SURVEY ]" : "  SURVEY  "
                         height: 24
                         width: 90
                         onActivated: centerPanel.activeTab = "survey"
+                    }
+                    ActionBtn {
+                        visible: {
+                            var d = backend.devices
+                            for (var i = 0; i < d.length; i++)
+                                if ((d[i].device_type || "").indexOf("controller") !== -1) return true
+                            return false
+                        }
+                        label: centerPanel.activeTab === "ami" ? "[ AMI ]" : "  AMI  "
+                        height: 24
+                        width: 72
+                        onActivated: centerPanel.activeTab = "ami"
                     }
                     ActionBtn {
                         label: centerPanel.activeTab === "messages"
@@ -860,6 +878,263 @@ Window {
                     }
                 }
 
+                // ── Trade tab ── //
+                ColumnLayout {
+                    id: tradeTab
+                    property string view: "directory"
+                    property string shopCode: ""
+                    property string shopName: ""
+
+                    visible: centerPanel.activeTab === "trade"
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    spacing: 4
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 6
+
+                        ActionBtn {
+                            label: "[ ← BACK ]"
+                            visible: tradeTab.view === "shop"
+                            width: 80; height: 24
+                            onActivated: tradeTab.view = "directory"
+                        }
+                        Text {
+                            text: tradeTab.view === "directory" ? "TRADING NETWORK" : tradeTab.shopName
+                            color: theme.txtAccent
+                            font { family: theme.mono; pointSize: 10; bold: true }
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                        }
+                        ActionBtn {
+                            label: "[ ↺ ]"
+                            visible: tradeTab.view === "directory"
+                            width: 36; height: 24
+                            onActivated: backend.fetchTraders()
+                        }
+                    }
+
+                    Rectangle { Layout.fillWidth: true; height: 1; color: theme.border }
+
+                    // Directory view
+                    ListView {
+                        id: tabTraderList
+                        visible: tradeTab.view === "directory"
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        model: backend.traders
+                        clip: true
+                        spacing: 5
+
+                        delegate: Rectangle {
+                            width: tabTraderList.width
+                            height: tabTraderCol.implicitHeight + 16
+                            color: theme.hover
+                            border.color: theme.border
+                            border.width: 1
+
+                            ColumnLayout {
+                                id: tabTraderCol
+                                anchors { left: parent.left; right: parent.right; top: parent.top; margins: 8 }
+                                spacing: 4
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 6
+                                    Text {
+                                        text: "◈ " + (modelData.shop_name || "UNNAMED SHOP")
+                                        color: theme.txtAccent
+                                        font { family: theme.mono; pointSize: 9; bold: true }
+                                        Layout.fillWidth: true
+                                        elide: Text.ElideRight
+                                    }
+                                    Rectangle {
+                                        visible: !!modelData.is_local
+                                        width: 46; height: 18
+                                        color: "transparent"
+                                        border.color: theme.txtMid; border.width: 1
+                                        radius: 2
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "LOCAL"
+                                            color: theme.txtBright
+                                            font { family: theme.mono; pointSize: 7 }
+                                        }
+                                    }
+                                    Text {
+                                        text: (modelData.trade_count || 0) + " TRADES"
+                                        color: theme.txtDim
+                                        font { family: theme.mono; pointSize: 8 }
+                                    }
+                                    ActionBtn {
+                                        label: "[ BROWSE ]"
+                                        width: 84; height: 24
+                                        onActivated: {
+                                            tradeTab.shopCode = modelData.controller_code || ""
+                                            tradeTab.shopName = modelData.shop_name || "SHOP"
+                                            tradeTab.view = "shop"
+                                            backend.browseShop(tradeTab.shopCode)
+                                        }
+                                    }
+                                }
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 8
+                                    Text {
+                                        text: (modelData.owner_name || "UNKNOWN").toUpperCase()
+                                        color: theme.txtMid
+                                        font { family: theme.mono; pointSize: 8 }
+                                        Layout.fillWidth: true
+                                    }
+                                    Text {
+                                        visible: !!(modelData.location || modelData.star)
+                                        text: (modelData.location || modelData.star || "").toUpperCase()
+                                        color: theme.txtDim
+                                        font { family: theme.mono; pointSize: 7 }
+                                    }
+                                }
+                            }
+                        }
+
+                        Text {
+                            visible: tabTraderList.count === 0
+                            anchors.centerIn: parent
+                            text: "no traders found — press ↺ to load"
+                            color: theme.txtDim
+                            font { family: theme.mono; pointSize: 9 }
+                        }
+                    }
+
+                    // Shop trade list
+                    ListView {
+                        id: tabShopTradeList
+                        visible: tradeTab.view === "shop"
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        model: backend.shopTrades
+                        clip: true
+                        spacing: 5
+
+                        delegate: Rectangle {
+                            id: tabTradeCard
+                            property int stock: modelData.current_stock || 0
+                            width: tabShopTradeList.width
+                            height: tabTradeCardCol.implicitHeight + 16
+                            color: theme.hover
+                            border.color: tabTradeCard.stock > 0 ? theme.border : theme.txtDim
+                            border.width: 1
+                            opacity: tabTradeCard.stock > 0 ? 1.0 : 0.5
+
+                            ColumnLayout {
+                                id: tabTradeCardCol
+                                anchors { left: parent.left; right: parent.right; top: parent.top; margins: 8 }
+                                spacing: 5
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 6
+                                    Text {
+                                        text: modelData.name || "TRADE"
+                                        color: tabTradeCard.stock > 0 ? theme.txtAccent : theme.txtDim
+                                        font { family: theme.mono; pointSize: 9; bold: true }
+                                        Layout.fillWidth: true
+                                        elide: Text.ElideRight
+                                    }
+                                    Text {
+                                        text: "×" + tabTradeCard.stock
+                                        color: tabTradeCard.stock > 0 ? theme.txtAmber : theme.txtRed
+                                        font { family: theme.mono; pointSize: 8 }
+                                    }
+                                    ActionBtn {
+                                        label: "[ EXECUTE ]"
+                                        width: 90; height: 24
+                                        enabled: tabTradeCard.stock > 0
+                                        onActivated: backend.executeTrade(tradeTab.shopCode, modelData.trade_code || "")
+                                    }
+                                }
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 8
+
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 1
+                                        Text { text: "COST"; color: theme.txtDim; font { family: theme.mono; pointSize: 7 } }
+                                        Repeater {
+                                            model: {
+                                                var res = (modelData.criteria || {}).resources || {}
+                                                return Object.keys(res).map(function(k) { return { name: k, qty: res[k] } })
+                                            }
+                                            Text {
+                                                text: modelData.name.toUpperCase() + "  ×" + modelData.qty
+                                                color: theme.txtMid
+                                                font { family: theme.mono; pointSize: 8 }
+                                            }
+                                        }
+                                        Repeater {
+                                            model: {
+                                                var dev = (modelData.criteria || {}).devices || {}
+                                                return Object.keys(dev).map(function(k) { return { name: k, qty: dev[k] } })
+                                            }
+                                            Text {
+                                                text: modelData.name.toUpperCase().replace(/_/g," ") + "  ×" + modelData.qty
+                                                color: theme.txtMid
+                                                font { family: theme.mono; pointSize: 8 }
+                                            }
+                                        }
+                                    }
+
+                                    Text {
+                                        text: "→"
+                                        color: theme.txtDim
+                                        font { family: theme.mono; pointSize: 10 }
+                                        Layout.alignment: Qt.AlignVCenter
+                                    }
+
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 1
+                                        Text { text: "GET"; color: theme.txtDim; font { family: theme.mono; pointSize: 7 } }
+                                        Repeater {
+                                            model: {
+                                                var res = (modelData.rewards || {}).resources || {}
+                                                return Object.keys(res).map(function(k) { return { name: k, qty: res[k] } })
+                                            }
+                                            Text {
+                                                text: modelData.name.toUpperCase() + "  ×" + modelData.qty
+                                                color: theme.txtBright
+                                                font { family: theme.mono; pointSize: 8 }
+                                            }
+                                        }
+                                        Repeater {
+                                            model: {
+                                                var dev = (modelData.rewards || {}).devices || {}
+                                                return Object.keys(dev).map(function(k) { return { name: k, qty: dev[k] } })
+                                            }
+                                            Text {
+                                                text: modelData.name.toUpperCase().replace(/_/g," ") + "  ×" + modelData.qty
+                                                color: theme.txtBright
+                                                font { family: theme.mono; pointSize: 8 }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Text {
+                            visible: tabShopTradeList.count === 0
+                            anchors.centerIn: parent
+                            text: "no trades at this shop"
+                            color: theme.txtDim
+                            font { family: theme.mono; pointSize: 9 }
+                        }
+                    }
+                }
+
                 // ── Survey tab ── //
                 ColumnLayout {
                     visible: centerPanel.activeTab === "survey"
@@ -867,7 +1142,6 @@ Window {
                     Layout.fillHeight: true
                     spacing: 4
 
-                    // No survey drones warning
                     Text {
                         visible: {
                             var d = backend.devices
@@ -882,9 +1156,8 @@ Window {
                         Layout.fillHeight: true
                     }
 
-                    // Planet list (only when at least one survey drone exists)
-                    ListView {
-                        id: planetList
+                    Flickable {
+                        id: surveyFlickable
                         visible: {
                             var d = backend.devices
                             for (var i = 0; i < d.length; i++)
@@ -893,116 +1166,392 @@ Window {
                         }
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        model: backend.planets
+                        contentHeight: surveyContent.implicitHeight
                         clip: true
-                        spacing: 6
+                        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
-                        delegate: Rectangle {
-                            id: planetDelegate
-                            property var planet: modelData
-                            width: planetList.width
-                            color: theme.hover
-                            border.color: theme.border
-                            border.width: 1
-                            height: planetCol.implicitHeight + 16
+                        Column {
+                            id: surveyContent
+                            width: surveyFlickable.width
+                            spacing: 6
 
-                            Column {
-                                id: planetCol
-                                anchors { left: parent.left; right: parent.right; top: parent.top; margins: 8 }
-                                spacing: 6
+                            // ── Planets ── //
+                            Text {
+                                text: "── PLANETS ──────────────────────────────"
+                                color: theme.txtDim
+                                font { family: theme.mono; pointSize: 8 }
+                            }
 
-                                // Planet header row
-                                RowLayout {
-                                    width: parent.width
-                                    spacing: 8
+                            Text {
+                                visible: backend.planets.length === 0
+                                text: "no planet data — press [ SCAN SYSTEM ] first"
+                                color: theme.txtDim
+                                font { family: theme.mono; pointSize: 8 }
+                                leftPadding: 8
+                            }
 
-                                    Text {
-                                        text: "◉ " + (modelData.designation || "UNKNOWN")
-                                        color: theme.txtAccent
-                                        font { family: theme.mono; pointSize: 10; bold: true }
-                                        Layout.fillWidth: true
-                                    }
-                                    Text {
-                                        text: (modelData.type || "").toUpperCase()
-                                        color: theme.txtMid
-                                        font { family: theme.mono; pointSize: 8 }
-                                    }
-                                    Text {
-                                        text: modelData.in_habitable_zone ? "♦ HZ" : ""
-                                        color: theme.txtBright
-                                        font { family: theme.mono; pointSize: 8 }
-                                    }
-                                }
+                            Repeater {
+                                model: backend.planets
 
-                                // Stats row
-                                RowLayout {
-                                    width: parent.width
-                                    spacing: 16
-                                    Text {
-                                        text: "DIST  " + (modelData.orbital_distance_au
-                                              ? Number(modelData.orbital_distance_au).toFixed(2) + " AU"
-                                              : "—")
-                                        color: theme.txtDim
-                                        font { family: theme.mono; pointSize: 8 }
-                                    }
-                                    Text {
-                                        text: "MOONS " + (modelData.moon_count || 0)
-                                        color: theme.txtDim
-                                        font { family: theme.mono; pointSize: 8 }
-                                    }
-                                    Item { Layout.fillWidth: true }
-                                }
+                                Rectangle {
+                                    id: planetDelegate
+                                    property var planet: modelData
+                                    width: surveyContent.width
+                                    color: theme.hover
+                                    border.color: theme.border
+                                    border.width: 1
+                                    height: planetCol.implicitHeight + 16
 
-                                // One button row per survey drone
-                                Repeater {
-                                    model: {
-                                        var surveyDrones = []
-                                        var d = backend.devices
-                                        for (var i = 0; i < d.length; i++)
-                                            if ((d[i].device_type || "").indexOf("survey") !== -1)
-                                                surveyDrones.push(d[i])
-                                        return surveyDrones
-                                    }
-
-                                    RowLayout {
-                                        width: planetCol.width
+                                    Column {
+                                        id: planetCol
+                                        anchors { left: parent.left; right: parent.right; top: parent.top; margins: 8 }
                                         spacing: 6
 
-                                        Text {
-                                            text: (modelData.device_type || "DRONE").toUpperCase().replace(/_/g, " ")
-                                                  + "  " + (modelData.device_code || "")
-                                            color: theme.txtDim
-                                            font { family: theme.mono; pointSize: 8 }
-                                            Layout.fillWidth: true
+                                        RowLayout {
+                                            width: parent.width
+                                            spacing: 8
+                                            Text {
+                                                text: "◉ " + (modelData.designation || "UNKNOWN")
+                                                color: theme.txtAccent
+                                                font { family: theme.mono; pointSize: 10; bold: true }
+                                                Layout.fillWidth: true
+                                            }
+                                            Text {
+                                                text: (modelData.type || "").toUpperCase()
+                                                color: theme.txtMid
+                                                font { family: theme.mono; pointSize: 8 }
+                                            }
+                                            Text {
+                                                text: modelData.in_habitable_zone ? "♦ HZ" : ""
+                                                color: theme.txtBright
+                                                font { family: theme.mono; pointSize: 8 }
+                                            }
                                         }
 
-                                        // SCAN if drone is already here, SEND otherwise
-                                        ActionBtn {
-                                            property bool atPlanet: (modelData.location || "") === (planetDelegate.planet.designation || "")
-                                            property bool droneScanning: {
-                                                var s = (modelData.status || "").toLowerCase()
-                                                return s === "scanning" || s === "active" || s === "busy"
+                                        RowLayout {
+                                            width: parent.width
+                                            spacing: 16
+                                            Text {
+                                                text: "DIST  " + (modelData.orbital_distance_au
+                                                      ? Number(modelData.orbital_distance_au).toFixed(2) + " AU"
+                                                      : "—")
+                                                color: theme.txtDim
+                                                font { family: theme.mono; pointSize: 8 }
                                             }
-                                            label: atPlanet ? (droneScanning ? "[ SCANNING… ]" : "[ SCAN ]") : "[ SEND ]"
-                                            enabled: !(atPlanet && droneScanning)
-                                            width: 80; height: 24
-                                            onActivated: {
-                                                if (atPlanet)
-                                                    backend.scanWithDevice(modelData.device_code)
-                                                else
-                                                    backend.travelDevice(modelData.device_code,
-                                                                         planetDelegate.planet.designation || "")
+                                            Text {
+                                                text: "MOONS " + (modelData.moon_count || 0)
+                                                color: theme.txtDim
+                                                font { family: theme.mono; pointSize: 8 }
+                                            }
+                                            Item { Layout.fillWidth: true }
+                                        }
+
+                                        Repeater {
+                                            model: {
+                                                var drones = []
+                                                var d = backend.devices
+                                                for (var i = 0; i < d.length; i++)
+                                                    if ((d[i].device_type || "").indexOf("survey") !== -1)
+                                                        drones.push(d[i])
+                                                return drones
+                                            }
+                                            RowLayout {
+                                                width: planetCol.width
+                                                spacing: 6
+                                                Text {
+                                                    text: (modelData.device_type || "DRONE").toUpperCase().replace(/_/g, " ")
+                                                          + "  " + (modelData.device_code || "")
+                                                    color: theme.txtDim
+                                                    font { family: theme.mono; pointSize: 8 }
+                                                    Layout.fillWidth: true
+                                                }
+                                                ActionBtn {
+                                                    property bool atPlanet: (modelData.location || "") === (planetDelegate.planet.designation || "")
+                                                    property bool droneBusy: {
+                                                        var s = (modelData.status || "").toLowerCase()
+                                                        return s === "scanning" || s === "active" || s === "busy"
+                                                    }
+                                                    label: atPlanet ? (droneBusy ? "[ SCANNING… ]" : "[ SCAN ]") : "[ SEND ]"
+                                                    enabled: !(atPlanet && droneBusy)
+                                                    width: 80; height: 24
+                                                    onActivated: {
+                                                        if (atPlanet)
+                                                            backend.scanWithDevice(modelData.device_code)
+                                                        else
+                                                            backend.travelDevice(modelData.device_code,
+                                                                                 planetDelegate.planet.designation || "")
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // ── Belts ── //
+                            Text {
+                                text: "── BELTS ────────────────────────────────"
+                                color: theme.txtDim
+                                font { family: theme.mono; pointSize: 8 }
+                                topPadding: 4
+                            }
+
+                            Text {
+                                visible: backend.asteroidBelts.length === 0
+                                text: "no belt data — press [ SCAN SYSTEM ] first"
+                                color: theme.txtDim
+                                font { family: theme.mono; pointSize: 8 }
+                                leftPadding: 8
+                            }
+
+                            Repeater {
+                                model: backend.asteroidBelts
+
+                                Rectangle {
+                                    id: beltSurveyDelegate
+                                    property var belt: modelData
+                                    width: surveyContent.width
+                                    color: theme.hover
+                                    border.color: theme.border
+                                    border.width: 1
+                                    height: beltSurveyCol.implicitHeight + 16
+
+                                    Column {
+                                        id: beltSurveyCol
+                                        anchors { left: parent.left; right: parent.right; top: parent.top; margins: 8 }
+                                        spacing: 6
+
+                                        RowLayout {
+                                            width: parent.width
+                                            Text {
+                                                text: "◈ " + (modelData.designation || "BELT")
+                                                color: theme.txtAccent
+                                                font { family: theme.mono; pointSize: 10; bold: true }
+                                                Layout.fillWidth: true
+                                            }
+                                            Text {
+                                                text: (modelData.density || "").toUpperCase()
+                                                color: theme.txtAmber
+                                                font { family: theme.mono; pointSize: 8 }
+                                            }
+                                        }
+
+                                        Repeater {
+                                            model: {
+                                                var drones = []
+                                                var d = backend.devices
+                                                for (var i = 0; i < d.length; i++)
+                                                    if ((d[i].device_type || "").indexOf("survey") !== -1)
+                                                        drones.push(d[i])
+                                                return drones
+                                            }
+                                            RowLayout {
+                                                width: beltSurveyCol.width
+                                                spacing: 6
+
+                                                Text {
+                                                    text: (modelData.device_type || "DRONE").toUpperCase().replace(/_/g, " ")
+                                                          + "  " + (modelData.device_code || "")
+                                                    color: theme.txtDim
+                                                    font { family: theme.mono; pointSize: 8 }
+                                                    Layout.fillWidth: true
+                                                }
+
+                                                ActionBtn {
+                                                    property bool atBelt: (modelData.location || "") === (beltSurveyDelegate.belt.designation || "")
+                                                    property bool droneBusy: {
+                                                        var s = (modelData.status || "").toLowerCase()
+                                                        return s === "scanning" || s === "searching" || s === "active" || s === "busy"
+                                                    }
+                                                    label: atBelt ? (droneBusy ? "[ BUSY… ]" : "[ SCAN ]") : "[ SEND ]"
+                                                    enabled: !(atBelt && droneBusy)
+                                                    width: 76; height: 24
+                                                    onActivated: {
+                                                        if (atBelt)
+                                                            backend.scanWithDevice(modelData.device_code)
+                                                        else
+                                                            backend.travelDevice(modelData.device_code,
+                                                                                 beltSurveyDelegate.belt.designation || "")
+                                                    }
+                                                }
+
+                                                ActionBtn {
+                                                    property bool atBelt: (modelData.location || "") === (beltSurveyDelegate.belt.designation || "")
+                                                    property bool droneBusy: {
+                                                        var s = (modelData.status || "").toLowerCase()
+                                                        return s === "scanning" || s === "searching" || s === "active" || s === "busy"
+                                                    }
+                                                    visible: atBelt
+                                                    label: droneBusy ? "[ SRCHING… ]" : "[ SEARCH ]"
+                                                    enabled: !droneBusy
+                                                    width: 84; height: 24
+                                                    onActivated: backend.searchWithDevice(modelData.device_code)
+                                                }
                                             }
                                         }
                                     }
                                 }
                             }
                         }
+                    }
+                }
+
+                // ── AMI Controllers tab ── //
+                ColumnLayout {
+                    visible: centerPanel.activeTab === "ami"
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    spacing: 4
+
+                    ListView {
+                        id: controllerList
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        model: backend.devices.filter(function(d) {
+                            return (d.device_type || "").indexOf("controller") !== -1
+                        })
+                        clip: true
+                        spacing: 8
+
+                        delegate: Rectangle {
+                            id: ctrlDelegate
+                            property var ctrl: modelData
+                            width: controllerList.width
+                            color: theme.hover
+                            border.color: theme.border
+                            border.width: 1
+                            height: ctrlCol.implicitHeight + 16
+
+                            Column {
+                                id: ctrlCol
+                                anchors { left: parent.left; right: parent.right; top: parent.top; margins: 8 }
+                                spacing: 6
+
+                                RowLayout {
+                                    width: parent.width
+                                    Text {
+                                        text: "◈ " + (modelData.device_type || "CONTROLLER").toUpperCase().replace(/_/g, " ")
+                                        color: theme.txtAccent
+                                        font { family: theme.mono; pointSize: 10; bold: true }
+                                        Layout.fillWidth: true
+                                    }
+                                    Text {
+                                        text: (modelData.status || "").toUpperCase()
+                                        color: theme.txtMid
+                                        font { family: theme.mono; pointSize: 8 }
+                                    }
+                                }
+
+                                Text {
+                                    text: "CODE  " + (modelData.device_code || "—")
+                                          + "   LOC  " + (modelData.location || "—")
+                                    color: theme.txtDim
+                                    font { family: theme.mono; pointSize: 8 }
+                                    width: parent.width
+                                    elide: Text.ElideRight
+                                }
+
+                                Text {
+                                    visible: !!(modelData.directive || modelData.current_directive)
+                                    text: "DIRECTIVE  " + (modelData.directive || modelData.current_directive || "")
+                                    color: theme.txtAmber
+                                    font { family: theme.mono; pointSize: 8 }
+                                }
+
+                                Text {
+                                    property var fleet: modelData.fleet || modelData.assigned_devices || []
+                                    visible: fleet.length > 0
+                                    text: "FLEET  " + fleet.map(function(d) {
+                                        return d.device_code || d
+                                    }).join(", ")
+                                    color: theme.txtDim
+                                    font { family: theme.mono; pointSize: 8 }
+                                    width: parent.width
+                                    wrapMode: Text.WrapAtWordBoundaryOrAnywhere
+                                }
+
+                                // Fleet management
+                                RowLayout {
+                                    width: parent.width
+                                    spacing: 4
+                                    ActionBtn {
+                                        label: "[ ADOPT… ]"
+                                        Layout.fillWidth: true; height: 24
+                                        onActivated: {
+                                            amiAdoptDlg.controllerCode = modelData.device_code
+                                            amiAdoptDlg.open()
+                                        }
+                                    }
+                                    ActionBtn {
+                                        label: "[ RELEASE… ]"
+                                        Layout.fillWidth: true; height: 24
+                                        onActivated: {
+                                            amiReleaseDlg.controllerCode = modelData.device_code
+                                            amiReleaseDlg.open()
+                                        }
+                                    }
+                                    ActionBtn {
+                                        label: "[ ASSEMBLE ]"
+                                        Layout.fillWidth: true; height: 24
+                                        onActivated: backend.amiAssemble(modelData.device_code)
+                                    }
+                                }
+
+                                // Execution controls
+                                RowLayout {
+                                    width: parent.width
+                                    spacing: 4
+                                    ActionBtn {
+                                        label: "[ LAUNCH ]"
+                                        Layout.fillWidth: true; height: 24
+                                        onActivated: backend.amiLaunch(modelData.device_code)
+                                    }
+                                    ActionBtn {
+                                        label: "[ WITHDRAW ]"
+                                        Layout.fillWidth: true; height: 24
+                                        onActivated: backend.amiWithdraw(modelData.device_code)
+                                    }
+                                    ActionBtn {
+                                        label: "[ RESUME ]"
+                                        Layout.fillWidth: true; height: 24
+                                        onActivated: backend.amiResume(modelData.device_code)
+                                    }
+                                    ActionBtn {
+                                        label: "[ CLEAR ]"
+                                        Layout.fillWidth: true; height: 24
+                                        onActivated: backend.amiClearDirective(modelData.device_code)
+                                    }
+                                }
+
+                                // Directives (survey controller only)
+                                RowLayout {
+                                    width: parent.width
+                                    spacing: 4
+                                    visible: (modelData.device_type || "").indexOf("survey") !== -1
+
+                                    ActionBtn {
+                                        label: "[ SURVEY SYSTEM… ]"
+                                        Layout.fillWidth: true; height: 24
+                                        onActivated: {
+                                            amiSurveyDlg.controllerCode = modelData.device_code
+                                            amiSurveyDlg.moonsMode = "all"
+                                            amiSurveyDlg.recallEnabled = true
+                                            amiSurveyDlg.visible = true
+                                        }
+                                    }
+                                    ActionBtn {
+                                        label: "[ BELT SEARCH ]"
+                                        Layout.fillWidth: true; height: 24
+                                        onActivated: backend.amiBeltSearch(modelData.device_code)
+                                    }
+                                }
+                            }
+                        }
 
                         Text {
-                            visible: planetList.count === 0
+                            visible: controllerList.count === 0
                             anchors.centerIn: parent
-                            text: "no planet data — press [ SCAN SYSTEM ] first"
+                            text: "no AMI controllers — print one first"
                             color: theme.txtDim
                             font { family: theme.mono; pointSize: 9 }
                         }
@@ -1218,19 +1767,20 @@ Window {
                     MouseArea { anchors.fill: parent; onClicked: devicesBar.deviceFilter = "" }
                 }
 
-                // One chip per unique device_type
+                // One chip per unique type-prefix (e.g. transport_drone + transport_hauler → one TRANSPORT chip)
                 Repeater {
                     model: {
-                        var seen = {}, types = [], d = backend.devices
+                        var seen = {}, prefixes = [], d = backend.devices
                         for (var i = 0; i < d.length; i++) {
                             var t = d[i].device_type || ""
-                            if (t && !seen[t]) { seen[t] = true; types.push(t) }
+                            if (!t) continue
+                            var p = t.split("_")[0]
+                            if (!seen[p]) { seen[p] = true; prefixes.push(p) }
                         }
-                        return types
+                        return prefixes
                     }
                     Rectangle {
-                        property string dtype: modelData
-                        property string chipText: (dtype.split("_")[0] || dtype).toUpperCase()
+                        property string dtype: modelData   // now a prefix, e.g. "transport"
                         height: 20; width: chipLabel.implicitWidth + 14
                         color: devicesBar.deviceFilter === dtype ? theme.hover : "transparent"
                         border.color: devicesBar.deviceFilter === dtype ? theme.txtMid : theme.border
@@ -1238,7 +1788,7 @@ Window {
                         Text {
                             id: chipLabel
                             anchors.centerIn: parent
-                            text: parent.chipText
+                            text: parent.dtype.toUpperCase()
                             color: devicesBar.deviceFilter === parent.dtype ? theme.txtBright : theme.txtMid
                             font { family: theme.mono; pointSize: 7 }
                         }
@@ -1266,8 +1816,17 @@ Window {
                 height: parent.height
                 model: {
                     var f = devicesBar.deviceFilter
-                    if (f === "") return backend.devices
-                    return backend.devices.filter(function(d) { return (d.device_type || "") === f })
+                    var pinned = ["heaven_vessel", "replicant_matrix"]
+                    var base = f === ""
+                        ? backend.devices.slice()
+                        : backend.devices.filter(function(d) {
+                              return (d.device_type || "").split("_")[0] === f
+                          })
+                    return base.sort(function(a, b) {
+                        var aPin = pinned.indexOf(a.device_type || "") !== -1 ? 1 : 0
+                        var bPin = pinned.indexOf(b.device_type || "") !== -1 ? 1 : 0
+                        return bPin - aPin
+                    })
                 }
                 orientation: ListView.Horizontal
                 clip: true
@@ -1368,6 +1927,30 @@ Window {
                             }
                         }
 
+                        // AMI Controller actions (compact)
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 4
+                            visible: (modelData.device_type || "").indexOf("controller") !== -1
+                                     && devCard.devStatus !== "stowed"
+
+                            ActionBtn {
+                                label: "[ LAUNCH ]"
+                                Layout.fillWidth: true; height: 22
+                                onActivated: backend.amiLaunch(modelData.device_code)
+                            }
+                            ActionBtn {
+                                label: "[ WITHDRAW ]"
+                                Layout.fillWidth: true; height: 22
+                                onActivated: backend.amiWithdraw(modelData.device_code)
+                            }
+                            ActionBtn {
+                                label: "[ ASSEMBLE ]"
+                                Layout.fillWidth: true; height: 22
+                                onActivated: backend.amiAssemble(modelData.device_code)
+                            }
+                        }
+
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: 4
@@ -1375,6 +1958,7 @@ Window {
                             ActionBtn {
                                 visible: (modelData.device_type || "").indexOf("vessel") === -1
                                          && (modelData.device_type || "").indexOf("transport") === -1
+                                         && (modelData.device_type || "").indexOf("controller") === -1
                                 label: devCard.devStatus === "stowed" ? "[ DEPLOY ]" : "[ STOW ]"
                                 Layout.fillWidth: true
                                 height: 22
@@ -1406,6 +1990,16 @@ Window {
                                 visible: (modelData.device_type || "").indexOf("maintenance") !== -1
                                          && devCard.devStatus !== "stowed"
                                 onActivated: backend.setPatrol(modelData.device_code)
+                            }
+
+                            ActionBtn {
+                                label: "[ SEARCH ]"
+                                Layout.fillWidth: true
+                                height: 22
+                                visible: (modelData.device_type || "").indexOf("survey") !== -1
+                                         && (modelData.location || "").toUpperCase().indexOf("BELT") !== -1
+                                         && devCard.devStatus !== "stowed"
+                                onActivated: backend.searchWithDevice(modelData.device_code)
                             }
 
                             ActionBtn {
@@ -2306,6 +2900,110 @@ Window {
                     text: "no trades at this shop"
                     color: theme.txtDim
                     font { family: theme.mono; pointSize: 9 }
+                }
+            }
+        }
+    }
+
+    // AMI — adopt a device into a controller's fleet
+    InputDialog {
+        id: amiAdoptDlg
+        property string controllerCode: ""
+        heading: "ADOPT DEVICE INTO FLEET"
+        placeholder: "device code (e.g. 2AC61214)"
+        onConfirmed: (val) => {
+            if (val.trim()) backend.amiAdopt(controllerCode, val.trim().toUpperCase())
+        }
+    }
+
+    // AMI — release a device from a controller's fleet
+    InputDialog {
+        id: amiReleaseDlg
+        property string controllerCode: ""
+        heading: "RELEASE DEVICE FROM FLEET"
+        placeholder: "device code (e.g. 2AC61214)"
+        onConfirmed: (val) => {
+            if (val.trim()) backend.amiRelease(controllerCode, val.trim().toUpperCase())
+        }
+    }
+
+    // AMI — survey system directive config
+    Rectangle {
+        id: amiSurveyDlg
+        property string controllerCode: ""
+        property string moonsMode: "all"
+        property bool recallEnabled: true
+
+        visible: false
+        anchors.centerIn: parent
+        width: 320
+        height: amiSurveyBody.implicitHeight + 32
+        color: "#0b160c"
+        border.color: theme.txtMid
+        border.width: 1
+        z: 50
+        radius: 2
+
+        Column {
+            id: amiSurveyBody
+            anchors { left: parent.left; right: parent.right; top: parent.top; margins: 16 }
+            spacing: 10
+
+            Text {
+                text: "SURVEY SYSTEM DIRECTIVE"
+                color: theme.txtAccent
+                font { family: theme.mono; pointSize: 10; bold: true }
+            }
+
+            Text { text: "MOONS:"; color: theme.txtDim; font { family: theme.mono; pointSize: 8 } }
+            RowLayout {
+                width: parent.width
+                spacing: 4
+                ActionBtn {
+                    label: amiSurveyDlg.moonsMode === "all" ? "[ ALL ]" : "  ALL  "
+                    Layout.fillWidth: true; height: 26
+                    onActivated: amiSurveyDlg.moonsMode = "all"
+                }
+                ActionBtn {
+                    label: amiSurveyDlg.moonsMode === "none" ? "[ NONE ]" : "  NONE  "
+                    Layout.fillWidth: true; height: 26
+                    onActivated: amiSurveyDlg.moonsMode = "none"
+                }
+            }
+
+            Text { text: "RECALL WHEN DONE:"; color: theme.txtDim; font { family: theme.mono; pointSize: 8 } }
+            RowLayout {
+                width: parent.width
+                spacing: 4
+                ActionBtn {
+                    label: amiSurveyDlg.recallEnabled ? "[ YES ]" : "  YES  "
+                    Layout.fillWidth: true; height: 26
+                    onActivated: amiSurveyDlg.recallEnabled = true
+                }
+                ActionBtn {
+                    label: !amiSurveyDlg.recallEnabled ? "[ NO ]" : "  NO  "
+                    Layout.fillWidth: true; height: 26
+                    onActivated: amiSurveyDlg.recallEnabled = false
+                }
+            }
+
+            RowLayout {
+                width: parent.width
+                spacing: 6
+                ActionBtn {
+                    label: "[ SET DIRECTIVE ]"
+                    Layout.fillWidth: true; height: 28
+                    onActivated: {
+                        backend.amiSurveySystem(amiSurveyDlg.controllerCode,
+                                                amiSurveyDlg.moonsMode,
+                                                amiSurveyDlg.recallEnabled)
+                        amiSurveyDlg.visible = false
+                    }
+                }
+                ActionBtn {
+                    label: "[ CANCEL ]"
+                    width: 90; height: 28
+                    onActivated: amiSurveyDlg.visible = false
                 }
             }
         }

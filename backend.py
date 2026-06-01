@@ -215,6 +215,12 @@ class Backend(QObject):
         self._dispatch("action:scan_device", self._client.device_command,
                        device_code, "scan")
 
+    @Slot(str)
+    def searchWithDevice(self, device_code: str):
+        self._set_status(f"DRONE {device_code} SEARCHING…")
+        self._dispatch("action:search_device", self._client.device_command,
+                       device_code, "search")
+
     @Slot(str, str)
     def retarget(self, device_code: str, resource: str):
         self._set_status(f"RETARGETING {device_code} → {resource}…")
@@ -272,6 +278,60 @@ class Backend(QObject):
     def cancelPrint(self, device_code: str):
         self._set_status("CANCELLING PRINT…")
         self._dispatch("action:cancel_print", self._client.device_command, device_code, "deactivate")
+
+    # ── AMI Controller slots ────────────────────────────────────────────── #
+
+    @Slot(str, str)
+    def amiAdopt(self, controller_code: str, device_code: str):
+        self._set_status(f"ADOPTING {device_code}…")
+        self._dispatch("action:ami_adopt", self._client.device_command,
+                       controller_code, "adopt", {"device": device_code})
+
+    @Slot(str, str)
+    def amiRelease(self, controller_code: str, device_code: str):
+        self._set_status(f"RELEASING {device_code}…")
+        self._dispatch("action:ami_release", self._client.device_command,
+                       controller_code, "release", {"device": device_code})
+
+    @Slot(str)
+    def amiLaunch(self, controller_code: str):
+        self._set_status(f"LAUNCHING {controller_code}…")
+        self._dispatch("action:ami_launch", self._client.device_command, controller_code, "launch")
+
+    @Slot(str)
+    def amiWithdraw(self, controller_code: str):
+        self._set_status(f"WITHDRAWING {controller_code}…")
+        self._dispatch("action:ami_withdraw", self._client.device_command, controller_code, "withdraw")
+
+    @Slot(str)
+    def amiAssemble(self, controller_code: str):
+        self._set_status(f"ASSEMBLING {controller_code}…")
+        self._dispatch("action:ami_assemble", self._client.device_command, controller_code, "assemble")
+
+    @Slot(str)
+    def amiResume(self, controller_code: str):
+        self._set_status(f"RESUMING {controller_code}…")
+        self._dispatch("action:ami_resume", self._client.device_command, controller_code, "resume_directive")
+
+    @Slot(str)
+    def amiClearDirective(self, controller_code: str):
+        self._set_status("CLEARING DIRECTIVE…")
+        self._dispatch("action:ami_clear", self._client.device_command, controller_code, "clear_directive")
+
+    @Slot(str, str, bool)
+    def amiSurveySystem(self, controller_code: str, moons: str, recall: bool):
+        self._set_status("SETTING SURVEY DIRECTIVE…")
+        self._dispatch("action:ami_directive", self._client.device_command,
+                       controller_code, "set_directive",
+                       {"directive": "survey_system",
+                        "configuration": {"planets": "all", "moons": moons, "recall": recall}})
+
+    @Slot(str)
+    def amiBeltSearch(self, controller_code: str):
+        self._set_status("SETTING BELT SEARCH…")
+        self._dispatch("action:ami_directive", self._client.device_command,
+                       controller_code, "set_directive",
+                       {"directive": "belt_search", "configuration": {}})
 
     @Slot(str, str)
     def deviceCommand(self, device_code: str, command: str):
