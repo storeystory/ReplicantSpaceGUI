@@ -42,8 +42,11 @@ class ApiClient:
     def scan_devices(self, code: str) -> list:
         return self._get(f"/replicants/{code}/scan/devices")
 
-    def travel(self, code: str, destination: str) -> dict:
-        return self._post(f"/replicants/{code}/travel", {"destination": destination})
+    def travel(self, code: str, destination: str, dry_run: bool = False) -> dict:
+        body: dict = {"destination": destination}
+        if dry_run:
+            body["dry_run"] = True
+        return self._post(f"/replicants/{code}/travel", body)
 
     def mine(self, code: str, resource: str) -> dict:
         return self._post(f"/replicants/{code}/mine", {"resource_type": resource})

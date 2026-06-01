@@ -206,6 +206,10 @@ Window {
             centerPanel.activeTab = "system"
         }
         function onInventoryChanged() { root.invNextRefresh = 30 }
+        function onDevicesChanged() {
+            var x = deviceList.contentX
+            Qt.callLater(function() { deviceList.contentX = x })
+        }
     }
 
     Timer {
@@ -489,6 +493,12 @@ Window {
                                     color: theme.txtAmber
                                     font { family: theme.mono; pointSize: 9 }
                                     Layout.preferredWidth: 80
+                                }
+                                ActionBtn {
+                                    label: "[ DRY RUN ]"
+                                    width: 90
+                                    height: 24
+                                    onActivated: backend.travelDryRun(modelData.designation || "")
                                 }
                                 ActionBtn {
                                     label: "→ GO"
@@ -1172,18 +1182,93 @@ Window {
     TermPanel {
         id: devicesBar
         anchors { bottom: parent.bottom; left: parent.left; right: parent.right }
-        height: 150
+        height: 210
         heading: "DEVICES"
+
+        property string deviceFilter: ""
 
         ColumnLayout {
             anchors { fill: parent; margins: 12; topMargin: 26 }
-            spacing: 0
+            spacing: 4
+
+            // Filter chips
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 4
+
+                Text {
+                    text: "FILTER:"
+                    color: theme.txtDim
+                    font { family: theme.mono; pointSize: 7 }
+                }
+
+                // ALL chip
+                Rectangle {
+                    height: 20; width: allChipLabel.implicitWidth + 14
+                    color: devicesBar.deviceFilter === "" ? theme.hover : "transparent"
+                    border.color: devicesBar.deviceFilter === "" ? theme.txtMid : theme.border
+                    border.width: 1
+                    Text {
+                        id: allChipLabel
+                        anchors.centerIn: parent
+                        text: "ALL"
+                        color: devicesBar.deviceFilter === "" ? theme.txtBright : theme.txtMid
+                        font { family: theme.mono; pointSize: 7 }
+                    }
+                    MouseArea { anchors.fill: parent; onClicked: devicesBar.deviceFilter = "" }
+                }
+
+                // One chip per unique device_type
+                Repeater {
+                    model: {
+                        var seen = {}, types = [], d = backend.devices
+                        for (var i = 0; i < d.length; i++) {
+                            var t = d[i].device_type || ""
+                            if (t && !seen[t]) { seen[t] = true; types.push(t) }
+                        }
+                        return types
+                    }
+                    Rectangle {
+                        property string dtype: modelData
+                        property string chipText: (dtype.split("_")[0] || dtype).toUpperCase()
+                        height: 20; width: chipLabel.implicitWidth + 14
+                        color: devicesBar.deviceFilter === dtype ? theme.hover : "transparent"
+                        border.color: devicesBar.deviceFilter === dtype ? theme.txtMid : theme.border
+                        border.width: 1
+                        Text {
+                            id: chipLabel
+                            anchors.centerIn: parent
+                            text: parent.chipText
+                            color: devicesBar.deviceFilter === parent.dtype ? theme.txtBright : theme.txtMid
+                            font { family: theme.mono; pointSize: 7 }
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: devicesBar.deviceFilter =
+                                devicesBar.deviceFilter === parent.dtype ? "" : parent.dtype
+                        }
+                    }
+                }
+
+                Item { Layout.fillWidth: true }
+            }
+
+            ScrollView {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                ScrollBar.horizontal.policy: ScrollBar.AsNeeded
+                ScrollBar.vertical.policy: ScrollBar.AlwaysOff
+                clip: true
 
             ListView {
                 id: deviceList
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                model: backend.devices
+                width: parent.width
+                height: parent.height
+                model: {
+                    var f = devicesBar.deviceFilter
+                    if (f === "") return backend.devices
+                    return backend.devices.filter(function(d) { return (d.device_type || "") === f })
+                }
                 orientation: ListView.Horizontal
                 clip: true
                 spacing: 6
@@ -1232,12 +1317,64 @@ Window {
 
                         Item { Layout.fillHeight: true }
 
+                        // Vessel / carrier actions
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 4
+                            visible: {
+                                var t = modelData.device_type || ""
+                                return (t.indexOf("vessel") !== -1 ||
+                                        t.indexOf("surge") !== -1 ||
+                                        t === "mobile_fleet")
+                                    && devCard.devStatus !== "stowed"
+                            }
+
+                            ActionBtn {
+                                label: "[ TRAVEL… ]"
+                                Layout.fillWidth: true; height: 22
+                                onActivated: {
+                                    deviceTravelDialog.deviceCode = modelData.device_code
+                                    deviceTravelDialog.open()
+                                }
+                            }
+                            ActionBtn {
+                                label: "[ LOAD… ]"
+                                Layout.fillWidth: true; height: 22
+                                onActivated: vesselLoadDialog.open(modelData.device_code)
+                            }
+                            ActionBtn {
+                                label: "[ UNLOAD ]"
+                                Layout.fillWidth: true; height: 22
+                                onActivated: backend.vesselUnload(modelData.device_code)
+                            }
+                        }
+
+                        // Surge plate taxi/manual config
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 4
+                            visible: (modelData.device_type || "") === "surge_plate"
+                                     && devCard.devStatus !== "stowed"
+
+                            ActionBtn {
+                                label: "[ TAXI MODE ]"
+                                Layout.fillWidth: true; height: 22
+                                onActivated: backend.configureSurgePlate(modelData.device_code, "taxi")
+                            }
+                            ActionBtn {
+                                label: "[ MANUAL MODE ]"
+                                Layout.fillWidth: true; height: 22
+                                onActivated: backend.configureSurgePlate(modelData.device_code, "manual")
+                            }
+                        }
+
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: 4
 
                             ActionBtn {
                                 visible: (modelData.device_type || "").indexOf("vessel") === -1
+                                         && (modelData.device_type || "").indexOf("transport") === -1
                                 label: devCard.devStatus === "stowed" ? "[ DEPLOY ]" : "[ STOW ]"
                                 Layout.fillWidth: true
                                 height: 22
@@ -1260,6 +1397,15 @@ Window {
                                 visible: (modelData.device_type || "").indexOf("autofactory") !== -1
                                          && devCard.devStatus !== "stowed"
                                 onActivated: backend.cancelPrint(modelData.device_code)
+                            }
+
+                            ActionBtn {
+                                label: "[ PATROL ]"
+                                Layout.fillWidth: true
+                                height: 22
+                                visible: (modelData.device_type || "").indexOf("maintenance") !== -1
+                                         && devCard.devStatus !== "stowed"
+                                onActivated: backend.setPatrol(modelData.device_code)
                             }
 
                             ActionBtn {
@@ -1286,6 +1432,39 @@ Window {
                                     + "  " + (modelData.device_code || "")
                                 )
                             }
+
+                            // Transport drone actions
+                            ActionBtn {
+                                label: "[ TRAVEL… ]"
+                                Layout.fillWidth: true
+                                height: 22
+                                visible: (modelData.device_type || "").indexOf("transport") !== -1
+                                         && devCard.devStatus !== "stowed"
+                                onActivated: {
+                                    deviceTravelDialog.deviceCode = modelData.device_code
+                                    deviceTravelDialog.open()
+                                }
+                            }
+                            ActionBtn {
+                                label: "[ COLLECT… ]"
+                                Layout.fillWidth: true
+                                height: 22
+                                visible: (modelData.device_type || "").indexOf("transport") !== -1
+                                         && devCard.devStatus !== "stowed"
+                                onActivated: collectDialog.open(
+                                    modelData.device_code,
+                                    (modelData.device_type || "DRONE").toUpperCase().replace(/_/g, " ")
+                                    + "  " + (modelData.device_code || "")
+                                )
+                            }
+                            ActionBtn {
+                                label: "[ DUMP ]"
+                                Layout.fillWidth: true
+                                height: 22
+                                visible: (modelData.device_type || "").indexOf("transport") !== -1
+                                         && devCard.devStatus !== "stowed"
+                                onActivated: backend.depositResources(modelData.device_code)
+                            }
                         }
                     }
                 }
@@ -1298,6 +1477,7 @@ Window {
                     font { family: theme.mono; pointSize: 9 }
                 }
             }
+            } // ScrollView
         }
     }
 
@@ -1516,6 +1696,210 @@ Window {
         heading: "TRANSFER  —  LOCAL"
         placeholder: "target empty matrix device code"
         onConfirmed: (val) => { if (val.trim()) backend.transfer(val.trim().toUpperCase()) }
+    }
+
+    // Vessel travel dialog
+    Rectangle {
+        id: deviceTravelDialog
+        property string deviceCode: ""
+        function open() { dvTravelInput.text = ""; visible = true; dvTravelInput.forceActiveFocus() }
+        function close() { visible = false }
+
+        visible: false
+        anchors.centerIn: parent
+        width: 380; height: 140
+        color: "#0b160c"
+        border.color: theme.txtMid; border.width: 1
+        z: 50; radius: 2
+
+        Column {
+            anchors { fill: parent; margins: 16 }
+            spacing: 12
+
+            Text {
+                text: "VESSEL TRAVEL TO"
+                color: theme.txtAccent
+                font { family: theme.mono; pointSize: 10; bold: true }
+            }
+            Rectangle {
+                width: parent.width; height: 32
+                color: "#060c07"; border.color: theme.border; border.width: 1
+                Text {
+                    anchors { fill: parent; leftMargin: 8; rightMargin: 8 }
+                    verticalAlignment: Text.AlignVCenter
+                    text: "destination (e.g. SOL)"
+                    color: theme.txtDim
+                    font { family: theme.mono; pointSize: 10 }
+                    visible: dvTravelInput.text === ""
+                }
+                TextInput {
+                    id: dvTravelInput
+                    anchors { fill: parent; leftMargin: 8; rightMargin: 8 }
+                    verticalAlignment: TextInput.AlignVCenter
+                    color: theme.txtBright
+                    font { family: theme.mono; pointSize: 10 }
+                    Keys.onReturnPressed: {
+                        if (text.trim()) backend.travelDevice(deviceTravelDialog.deviceCode, text.trim().toUpperCase())
+                        deviceTravelDialog.close()
+                    }
+                    Keys.onEscapePressed: deviceTravelDialog.close()
+                }
+            }
+            RowLayout {
+                width: parent.width; spacing: 8
+                ActionBtn {
+                    label: "[ CONFIRM ]"; width: 120; height: 28
+                    onActivated: {
+                        if (dvTravelInput.text.trim())
+                            backend.travelDevice(deviceTravelDialog.deviceCode, dvTravelInput.text.trim().toUpperCase())
+                        deviceTravelDialog.close()
+                    }
+                }
+                ActionBtn { label: "[ CANCEL ]"; width: 100; height: 28; onActivated: deviceTravelDialog.close() }
+            }
+        }
+    }
+
+    // Vessel load (attach device) dialog
+    Rectangle {
+        id: vesselLoadDialog
+        property string deviceCode: ""
+        function open(code) { deviceCode = code; vLoadInput.text = ""; visible = true; vLoadInput.forceActiveFocus() }
+        function close() { visible = false }
+
+        visible: false
+        anchors.centerIn: parent
+        width: 380; height: 140
+        color: "#0b160c"
+        border.color: theme.txtMid; border.width: 1
+        z: 50; radius: 2
+
+        Column {
+            anchors { fill: parent; margins: 16 }
+            spacing: 12
+
+            Text {
+                text: "LOAD DEVICE INTO VESSEL"
+                color: theme.txtAccent
+                font { family: theme.mono; pointSize: 10; bold: true }
+            }
+            Rectangle {
+                width: parent.width; height: 32
+                color: "#060c07"; border.color: theme.border; border.width: 1
+                Text {
+                    anchors { fill: parent; leftMargin: 8; rightMargin: 8 }
+                    verticalAlignment: Text.AlignVCenter
+                    text: "device code to load (e.g. 2AC61214)"
+                    color: theme.txtDim
+                    font { family: theme.mono; pointSize: 10 }
+                    visible: vLoadInput.text === ""
+                }
+                TextInput {
+                    id: vLoadInput
+                    anchors { fill: parent; leftMargin: 8; rightMargin: 8 }
+                    verticalAlignment: TextInput.AlignVCenter
+                    color: theme.txtBright
+                    font { family: theme.mono; pointSize: 10 }
+                    Keys.onReturnPressed: {
+                        if (text.trim()) backend.vesselLoad(vesselLoadDialog.deviceCode, text.trim().toUpperCase())
+                        vesselLoadDialog.close()
+                    }
+                    Keys.onEscapePressed: vesselLoadDialog.close()
+                }
+            }
+            RowLayout {
+                width: parent.width; spacing: 8
+                ActionBtn {
+                    label: "[ LOAD ]"; width: 120; height: 28
+                    onActivated: {
+                        if (vLoadInput.text.trim())
+                            backend.vesselLoad(vesselLoadDialog.deviceCode, vLoadInput.text.trim().toUpperCase())
+                        vesselLoadDialog.close()
+                    }
+                }
+                ActionBtn { label: "[ CANCEL ]"; width: 100; height: 28; onActivated: vesselLoadDialog.close() }
+            }
+        }
+    }
+
+    // Transport drone collect dialog
+    Rectangle {
+        id: collectDialog
+        property string deviceCode: ""
+        property string deviceLabel: ""
+        function open(code, label) {
+            deviceCode = code; deviceLabel = label
+            collectQtyInput.text = ""
+            visible = true; collectQtyInput.forceActiveFocus()
+        }
+        function close() { visible = false }
+
+        visible: false
+        anchors.centerIn: parent
+        width: 300
+        height: collectBody.implicitHeight + 32
+        color: "#0b160c"
+        border.color: theme.txtMid; border.width: 1
+        z: 50; radius: 2
+
+        Column {
+            id: collectBody
+            anchors { left: parent.left; right: parent.right; top: parent.top; margins: 16 }
+            spacing: 8
+
+            Text {
+                text: "COLLECT RESOURCES"
+                color: theme.txtAccent
+                font { family: theme.mono; pointSize: 10; bold: true }
+            }
+            Text {
+                text: collectDialog.deviceLabel
+                color: theme.txtMid
+                font { family: theme.mono; pointSize: 8 }
+                elide: Text.ElideRight
+                width: parent.width
+            }
+            Text { text: "QUANTITY:"; color: theme.txtDim; font { family: theme.mono; pointSize: 8 } }
+            Rectangle {
+                width: parent.width; height: 32
+                color: "#060c07"; border.color: theme.border; border.width: 1
+                Text {
+                    anchors { fill: parent; leftMargin: 8; rightMargin: 8 }
+                    verticalAlignment: Text.AlignVCenter
+                    text: "amount to collect"
+                    color: theme.txtDim
+                    font { family: theme.mono; pointSize: 9 }
+                    visible: collectQtyInput.text === ""
+                }
+                TextInput {
+                    id: collectQtyInput
+                    anchors { fill: parent; leftMargin: 8; rightMargin: 8 }
+                    verticalAlignment: TextInput.AlignVCenter
+                    color: theme.txtBright
+                    font { family: theme.mono; pointSize: 9 }
+                    inputMethodHints: Qt.ImhDigitsOnly
+                    Keys.onEscapePressed: collectDialog.close()
+                }
+            }
+            Text { text: "RESOURCE TYPE:"; color: theme.txtDim; font { family: theme.mono; pointSize: 8 } }
+            Repeater {
+                model: ["carbon", "silicates", "structural", "conductive", "rares", "volatiles"]
+                ActionBtn {
+                    label: "[ " + modelData.toUpperCase() + " ]"
+                    width: collectBody.width; height: 26
+                    enabled: parseInt(collectQtyInput.text) > 0
+                    onActivated: {
+                        backend.collectResources(collectDialog.deviceCode, modelData,
+                                                 parseInt(collectQtyInput.text))
+                        collectDialog.close()
+                    }
+                }
+            }
+            ActionBtn {
+                label: "[ CANCEL ]"; width: parent.width; height: 26
+                onActivated: collectDialog.close()
+            }
+        }
     }
 
     // Mine specific salvage site dialog

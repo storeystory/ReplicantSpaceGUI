@@ -190,6 +190,10 @@ class Backend(QObject):
         self._dispatch("action:travel", self._client.travel, self._code, destination)
 
     @Slot(str)
+    def travelDryRun(self, destination: str):
+        self._dispatch("dry_run:travel", self._client.travel, self._code, destination, True)
+
+    @Slot(str)
     def mine(self, resource: str):
         self._set_status(f"MINING {resource}…")
         self._dispatch("action:mine", self._client.mine, self._code, resource)
@@ -218,6 +222,36 @@ class Backend(QObject):
                        device_code, "retarget", {"resource_type": resource})
 
     @Slot(str, str)
+    def configureSurgePlate(self, device_code: str, mode: str):
+        self._set_status(f"CONFIGURING {device_code}…")
+        self._dispatch("action:configure", self._client.device_command,
+                       device_code, "configure", {"mode": mode})
+
+    @Slot(str, str)
+    def vesselLoad(self, device_code: str, target_device: str):
+        self._set_status(f"LOADING {target_device}…")
+        self._dispatch("action:vessel_load", self._client.device_command,
+                       device_code, "attach", {"device": target_device})
+
+    @Slot(str)
+    def vesselUnload(self, device_code: str):
+        self._set_status("UNLOADING…")
+        self._dispatch("action:vessel_unload", self._client.device_command,
+                       device_code, "detach")
+
+    @Slot(str, str, int)
+    def collectResources(self, device_code: str, resource: str, qty: int):
+        self._set_status(f"COLLECTING {resource}…")
+        self._dispatch("action:collect", self._client.device_command,
+                       device_code, "collect_resources", {"resources": {resource: qty}})
+
+    @Slot(str)
+    def depositResources(self, device_code: str):
+        self._set_status("DEPOSITING…")
+        self._dispatch("action:deposit", self._client.device_command,
+                       device_code, "deposit_resources")
+
+    @Slot(str, str)
     def mineWithDevice(self, device_code: str, resource: str):
         self._set_status(f"DRONE {device_code} MINING {resource}…")
         self._dispatch("action:mine", self._client.device_command, device_code, "start_mining", {"resource_type": resource})
@@ -227,6 +261,12 @@ class Backend(QObject):
         self._set_status(f"DRONE {device_code} MINING {target}…")
         self._dispatch("action:mine", self._client.device_command, device_code, "start_mining",
                        {"resource_type": resource, "target": target})
+
+    @Slot(str)
+    def setPatrol(self, device_code: str):
+        self._set_status(f"DISPATCHING {device_code}…")
+        self._dispatch("action:patrol", self._client.device_command,
+                       device_code, "set_directive", {"directive": "patrol"})
 
     @Slot(str)
     def cancelPrint(self, device_code: str):
@@ -363,11 +403,34 @@ class Backend(QObject):
                 [{"name": k, "qty": v} for k, v in combined.items()],
                 key=lambda x: x["name"]
             )
-            if not combined:
-                # Debug: show what the API actually returned so we can fix parsing
-                shape = repr(data)[:120] if data is not None else "None"
-                self.toastMessage.emit("warn", f"INV EMPTY — raw: {shape}")
             self.inventoryChanged.emit()
+        elif key == "dry_run:travel":
+            if isinstance(data, dict):
+                parts = []
+                dest = data.get("destination", "")
+                if dest:
+                    parts.append(f"→ {dest}")
+                for field in ("travel_time", "estimated_travel_time", "duration"):
+                    t = data.get(field)
+                    if t is not None:
+                        t = int(t)
+                        if t >= 3600:
+                            parts.append(f"{t // 3600}h {(t % 3600) // 60}m")
+                        elif t >= 60:
+                            parts.append(f"{t // 60}m {t % 60}s")
+                        else:
+                            parts.append(f"{t}s")
+                        break
+                for field in ("surge_cost", "cost", "fuel"):
+                    c = data.get(field)
+                    if c is not None:
+                        parts.append(f"cost:{c}")
+                        break
+                if not parts:
+                    parts = [f"{k}:{v}" for k, v in list(data.items())[:4]]
+                self.toastMessage.emit("info", "DRY RUN  " + "  ".join(parts))
+            else:
+                self.toastMessage.emit("info", f"DRY RUN: {str(data)[:80]}")
         elif key == "action:scan":
             belts = data.get("asteroid_belt", {}).get("belts", []) if isinstance(data, dict) else []
             self._asteroid_belts = belts
