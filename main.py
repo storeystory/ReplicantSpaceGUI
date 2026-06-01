@@ -7,14 +7,19 @@ from PySide6.QtQml import QQmlApplicationEngine
 
 from backend import Backend
 
-CONFIG_PATH = Path(__file__).parent / "config.json"
+if getattr(sys, "frozen", False):
+    # Running inside a Nuitka/PyInstaller bundle — config lives next to the executable
+    CONFIG_PATH = Path(sys.executable).parent / "config.json"
+else:
+    CONFIG_PATH = Path(__file__).parent / "config.json"
 
 
 def load_config() -> dict:
     if CONFIG_PATH.exists():
         with open(CONFIG_PATH) as f:
             return json.load(f)
-    return {}
+    print(f"ERROR: config.json not found at {CONFIG_PATH}", file=sys.stderr)
+    sys.exit(1)
 
 
 if __name__ == "__main__":
