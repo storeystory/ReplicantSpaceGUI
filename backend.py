@@ -39,6 +39,10 @@ class Backend(QObject):
     unreadCountChanged = Signal()
     tradersChanged = Signal()
     shopTradesChanged = Signal()
+    asteroidsChanged = Signal()
+    systemMapChanged = Signal()
+    beaconAuditChanged = Signal()
+    relayNetworkChanged = Signal()
     scanComplete = Signal()
     statusChanged = Signal()
     errorOccurred = Signal(str)
@@ -65,6 +69,12 @@ class Backend(QObject):
         self._unread_count: int = 0
         self._traders: list = []
         self._shop_trades: list = []
+        self._asteroids: list = []
+        self._system_map: list = []
+        self._beacon_audit: list = []
+        self._beacon_code_last: str = ""
+        self._beacon_audit_cursor: int | None = None
+        self._relay_networks: dict = {}
         self._status: str = "IDLE"
 
         self._live_workers: list = []
@@ -145,6 +155,32 @@ class Backend(QObject):
     def shopTrades(self) -> list:
         return self._shop_trades
 
+    @Property('QVariantList', notify=asteroidsChanged)
+    def asteroids(self) -> list:
+        return self._asteroids
+
+    @Property('QVariantList', notify=systemMapChanged)
+    def systemMap(self) -> list:
+        return self._system_map
+
+    @Property('QVariantList', notify=beaconAuditChanged)
+    def beaconAudit(self) -> list:
+        return self._beacon_audit
+
+    @Property(bool, notify=beaconAuditChanged)
+    def beaconAuditHasMore(self) -> bool:
+        return self._beacon_audit_cursor is not None and len(self._beacon_audit) > 0
+
+    @Property('QVariantList', notify=relayNetworkChanged)
+    def relayNetworks(self) -> list:
+        return [
+            {"relay_code": k,
+             "connections": v.get("connections", []),
+             "range_ly": v.get("range_ly"),
+             "status": v.get("status", "")}
+            for k, v in self._relay_networks.items()
+        ]
+
     @Property(str, notify=statusChanged)
     def status(self) -> str:
         return self._status
@@ -161,16 +197,18 @@ class Backend(QObject):
         self._dispatch("events",    self._client.get_replicant_events, self._code)
         self._dispatch("devices",   self._client.get_replicant_devices, self._code)
         self._dispatch("stars",     self._client.get_replicant_stars, self._code)
-        self._dispatch("messages",  self._client.get_messages, 20)
+        self._dispatch("messages",  self._client.get_messages, 50)
         loc = self._replicant.get("location", "")
         if loc:
-            self._dispatch("inventory", self._client.get_location_inventory, loc)
+            star = loc.split("-")[0]
+            self._dispatch("inventory", self._client.get_inventory, star)
 
     @Slot()
     def fetchInventory(self):
         loc = self._replicant.get("location", "")
         if loc:
-            self._dispatch("inventory", self._client.get_location_inventory, loc)
+            star = loc.split("-")[0]
+            self._dispatch("inventory", self._client.get_inventory, star)
         else:
             self.toastMessage.emit("warn", "Location unknown — sync first")
 
@@ -214,6 +252,28 @@ class Backend(QObject):
         self._set_status(f"DRONE {device_code} SCANNING…")
         self._dispatch("action:scan_device", self._client.device_command,
                        device_code, "scan")
+
+    @Slot()
+    def fetchAsteroids(self):
+        loc = self._replicant.get("location", "")
+        if not loc:
+            self.toastMessage.emit("warn", "Location unknown — sync first")
+            return
+        star = loc.split("-")[0]
+        self._dispatch("asteroids", self._client.get_location_asteroids, star)
+
+    @Slot()
+    def fetchSystemMap(self):
+        loc = self._replicant.get("location", "")
+        if not loc:
+            return
+        star = loc.split("-")[0]
+        self._dispatch("system_map", self._client.get_system_map, star)
+
+    @Slot(str)
+    def activateDevice(self, device_code: str):
+        self._set_status(f"ACTIVATING {device_code}…")
+        self._dispatch("action:activate", self._client.device_command, device_code, "activate")
 
     @Slot(str)
     def searchWithDevice(self, device_code: str):
@@ -274,6 +334,11 @@ class Backend(QObject):
         self._dispatch("action:patrol", self._client.device_command,
                        device_code, "set_directive", {"directive": "patrol"})
 
+    @Slot()
+    def stopMining(self):
+        self._set_status("STOPPING MINE…")
+        self._dispatch("action:stop_mining", self._client.stop_mine, self._code)
+
     @Slot(str)
     def cancelPrint(self, device_code: str):
         self._set_status("CANCELLING PRINT…")
@@ -333,6 +398,49 @@ class Backend(QObject):
                        controller_code, "set_directive",
                        {"directive": "belt_search", "configuration": {}})
 
+    # ── FTL Beacon slots ────────────────────────────────────────────────── #
+
+    @Slot(str, str, str)
+    def fetchBeaconAudit(self, beacon_code: str, device_type_filter: str, replicant_filter: str):
+        self._beacon_audit = []
+        self._beacon_audit_cursor = None
+        self._beacon_code_last = beacon_code
+        self.beaconAuditChanged.emit()
+        self._dispatch("beacon_audit", self._client.get_beacon_audit,
+                       beacon_code, None, 30, True,
+                       device_type_filter or None, replicant_filter or None)
+
+    @Slot()
+    def fetchBeaconAuditMore(self):
+        if not self._beacon_code_last or self._beacon_audit_cursor is None:
+            return
+        self._dispatch("beacon_audit_more", self._client.get_beacon_audit,
+                       self._beacon_code_last, self._beacon_audit_cursor, 30)
+
+    # ── FTL Relay slots ─────────────────────────────────────────────────── #
+
+    @Slot(str)
+    def fetchRelayNetwork(self, relay_code: str):
+        self._dispatch(f"relay_network:{relay_code}", self._client.get_relay_network, relay_code)
+
+    @Slot(str)
+    def activateRelay(self, relay_code: str):
+        self._set_status(f"ACTIVATING RELAY {relay_code}…")
+        self._dispatch("action:activate_relay", self._client.device_command, relay_code, "activate")
+
+    # ── System Hub slots ─────────────────────────────────────────────────── #
+
+    @Slot(str)
+    def activateHub(self, hub_code: str):
+        self._set_status(f"ACTIVATING HUB {hub_code}…")
+        self._dispatch("action:activate_hub", self._client.device_command, hub_code, "activate")
+
+    @Slot(str, str)
+    def setHubWelcomeMessage(self, hub_code: str, message: str):
+        self._set_status("SETTING WELCOME MESSAGE…")
+        self._dispatch("action:hub_message", self._client.device_command,
+                       hub_code, "set_welcome_message", {"message": message})
+
     @Slot(str, str)
     def deviceCommand(self, device_code: str, command: str):
         self._dispatch(f"action:cmd:{device_code}", self._client.device_command, device_code, command)
@@ -358,7 +466,7 @@ class Backend(QObject):
 
     @Slot()
     def fetchMessages(self):
-        self._dispatch("messages", self._client.get_messages, 20)
+        self._dispatch("messages", self._client.get_messages, 50)
 
     @Slot()
     def markAllRead(self):
@@ -491,6 +599,45 @@ class Backend(QObject):
                 self.toastMessage.emit("info", "DRY RUN  " + "  ".join(parts))
             else:
                 self.toastMessage.emit("info", f"DRY RUN: {str(data)[:80]}")
+        elif key == "asteroids":
+            self._asteroids = data if isinstance(data, list) else self._to_list(data)
+            self.asteroidsChanged.emit()
+        elif key == "system_map":
+            if isinstance(data, list):
+                self._system_map = data
+            elif isinstance(data, dict):
+                for k in ("locations", "items", "results", "data"):
+                    if k in data and isinstance(data[k], list):
+                        self._system_map = data[k]
+                        break
+                else:
+                    self._system_map = [data]
+            self.systemMapChanged.emit()
+        elif key in ("beacon_audit", "beacon_audit_more"):
+            entries: list = data if isinstance(data, list) else []
+            if isinstance(data, dict):
+                for k in ("entries", "items", "results", "data", "logs"):
+                    if k in data and isinstance(data[k], list):
+                        entries = data[k]
+                        break
+                if not entries:
+                    for v in data.values():
+                        if isinstance(v, list):
+                            entries = v
+                            break
+            if entries:
+                last_id = entries[-1].get("id")
+                self._beacon_audit_cursor = last_id if isinstance(last_id, int) else None
+            if key == "beacon_audit":
+                self._beacon_audit = entries
+            else:
+                self._beacon_audit = self._beacon_audit + entries
+            self.beaconAuditChanged.emit()
+        elif key.startswith("relay_network:"):
+            relay_code = key.split(":", 1)[1]
+            if isinstance(data, dict):
+                self._relay_networks[relay_code] = data
+                self.relayNetworkChanged.emit()
         elif key == "action:scan":
             belts = data.get("asteroid_belt", {}).get("belts", []) if isinstance(data, dict) else []
             self._asteroid_belts = belts
@@ -502,6 +649,8 @@ class Backend(QObject):
             n = len(belts)
             self.toastMessage.emit("info", f"SCAN complete — {n} belt{'s' if n != 1 else ''} found")
             self.refresh()
+            self.fetchAsteroids()
+            self.fetchSystemMap()
         elif key == "traders":
             self._traders = self._to_list(data)
             self.tradersChanged.emit()
@@ -510,12 +659,21 @@ class Backend(QObject):
             self.shopTradesChanged.emit()
         elif key == "messages":
             msg_data, unread = data if isinstance(data, tuple) else (data, 0)
-            self._messages = self._to_list(msg_data)
+            msgs = self._to_list(msg_data)
+            # _to_list only checks known envelope keys; if the API uses an
+            # unknown key we'd get [] while the unread header is non-zero.
+            # Fall back to the first list value found in the dict.
+            if not msgs and isinstance(msg_data, dict):
+                for v in msg_data.values():
+                    if isinstance(v, list):
+                        msgs = v
+                        break
+            self._messages = msgs
             self._unread_count = int(unread)
             self.messagesChanged.emit()
             self.unreadCountChanged.emit()
         elif key == "action:mark_read":
-            self._dispatch("messages", self._client.get_messages, 20)
+            self._dispatch("messages", self._client.get_messages, 50)
         elif key == "action:cancel_print":
             self._set_status("IDLE")
             self.toastMessage.emit("info", "PRINT CANCELLED")

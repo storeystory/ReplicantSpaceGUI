@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"import api_client, backend; print\\('OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('api_client.py'\\).read\\(\\)\\); ast.parse\\(open\\('backend.py'\\).read\\(\\)\\); print\\('syntax OK'\\)\")",
+      "Bash(curl -s \"https://api.replicant.space/swagger/\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('backend.py'\\).read\\(\\)\\); ast.parse\\(open\\('api_client.py'\\).read\\(\\)\\); print\\('OK'\\)\")"
+    ]
+  }
+}

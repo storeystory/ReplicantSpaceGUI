@@ -390,7 +390,7 @@ Window {
                         label: centerPanel.activeTab === "system" ? "[ SYSTEM SCAN ]" : "  SYSTEM SCAN  "
                         height: 24
                         width: 120
-                        onActivated: centerPanel.activeTab = "system"
+                        onActivated: { centerPanel.activeTab = "system"; backend.fetchAsteroids(); backend.fetchSystemMap() }
                     }
                     ActionBtn {
                         label: centerPanel.activeTab === "blueprints" ? "[ BLUEPRINTS ]" : "  BLUEPRINTS  "
@@ -427,6 +427,36 @@ Window {
                         height: 24
                         width: 72
                         onActivated: centerPanel.activeTab = "ami"
+                    }
+                    ActionBtn {
+                        visible: {
+                            var d = backend.devices
+                            for (var i = 0; i < d.length; i++)
+                                if ((d[i].device_type || "").indexOf("relay") !== -1) return true
+                            return false
+                        }
+                        label: centerPanel.activeTab === "relay" ? "[ RELAY ]" : "  RELAY  "
+                        height: 24
+                        width: 80
+                        onActivated: {
+                            centerPanel.activeTab = "relay"
+                            var d = backend.devices
+                            for (var i = 0; i < d.length; i++)
+                                if ((d[i].device_type || "").indexOf("relay") !== -1)
+                                    backend.fetchRelayNetwork(d[i].device_code)
+                        }
+                    }
+                    ActionBtn {
+                        visible: {
+                            var d = backend.devices
+                            for (var i = 0; i < d.length; i++)
+                                if ((d[i].device_type || "").indexOf("beacon") !== -1) return true
+                            return false
+                        }
+                        label: centerPanel.activeTab === "beacon" ? "[ BEACON ]" : "  BEACON  "
+                        height: 24
+                        width: 90
+                        onActivated: centerPanel.activeTab = "beacon"
                     }
                     ActionBtn {
                         label: centerPanel.activeTab === "messages"
@@ -538,127 +568,425 @@ Window {
                 }
 
                 // ── System scan tab ── //
-                RowLayout {
-                    visible: centerPanel.activeTab === "system"
-                    Layout.fillWidth: true
-                    Text {
-                        text: beltList.count > 0
-                              ? beltList.count + " BELT" + (beltList.count !== 1 ? "S" : "") + " — DATA FROM LAST SCAN"
-                              : "NO SCAN DATA"
-                        color: theme.txtDim
-                        font { family: theme.mono; pointSize: 8 }
-                        Layout.fillWidth: true
-                    }
-                    ActionBtn {
-                        label: "[ RESCAN ]"
-                        width: 90; height: 24
-                        onActivated: backend.scan()
-                    }
-                }
-
-                ListView {
-                    id: beltList
+                ColumnLayout {
                     visible: centerPanel.activeTab === "system"
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    model: backend.asteroidBelts
-                    clip: true
-                    spacing: 8
+                    spacing: 4
 
-                    delegate: Rectangle {
-                        width: beltList.width
-                        color: theme.hover
-                        border.color: theme.border
-                        border.width: 1
-                        height: beltCol.implicitHeight + 16
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+                        Text {
+                            text: backend.asteroidBelts.length > 0
+                                  ? backend.asteroidBelts.length + " BELT"
+                                    + (backend.asteroidBelts.length !== 1 ? "S" : "")
+                                    + " — DATA FROM LAST SCAN"
+                                  : "NO SCAN DATA"
+                            color: theme.txtDim
+                            font { family: theme.mono; pointSize: 8 }
+                            Layout.fillWidth: true
+                        }
+                        Text {
+                            property int threatCount: {
+                                var n = 0, a = backend.asteroids
+                                for (var i = 0; i < a.length; i++) if (a[i].impact_target) n++
+                                return n
+                            }
+                            visible: threatCount > 0
+                            text: "⚠ " + threatCount + " THREAT" + (threatCount !== 1 ? "S" : "")
+                            color: theme.txtRed
+                            font { family: theme.mono; pointSize: 8; bold: true }
+                        }
+                        ActionBtn {
+                            label: "[ MAP ]"
+                            width: 68; height: 24
+                            onActivated: backend.fetchSystemMap()
+                        }
+                        ActionBtn {
+                            label: "[ ASTEROIDS ]"
+                            width: 100; height: 24
+                            onActivated: backend.fetchAsteroids()
+                        }
+                        ActionBtn {
+                            label: "[ RESCAN ]"
+                            width: 90; height: 24
+                            onActivated: backend.scan()
+                        }
+                    }
+
+                    Flickable {
+                        id: scanFlickable
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        contentHeight: scanContent.implicitHeight
+                        clip: true
+                        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
                         Column {
-                            id: beltCol
-                            anchors { left: parent.left; right: parent.right; top: parent.top; margins: 8 }
-                            spacing: 6
+                            id: scanContent
+                            width: scanFlickable.width
+                            spacing: 8
 
-                            // Belt header
-                            RowLayout {
-                                width: parent.width
+                            // ── System Map ── //
+                            Column {
+                                width: scanContent.width
+                                spacing: 3
+                                visible: backend.systemMap.length > 0
+
                                 Text {
-                                    text: "◈ " + (modelData.designation || "BELT")
-                                    color: theme.txtAccent
-                                    font { family: theme.mono; pointSize: 10; bold: true }
-                                    Layout.fillWidth: true
-                                }
-                                Text {
-                                    text: (modelData.density || "").toUpperCase()
-                                    color: theme.txtAmber
+                                    text: "── SYSTEM MAP ───────────────────────────"
+                                    color: theme.txtDim
                                     font { family: theme.mono; pointSize: 8 }
                                 }
-                            }
 
-                            // Resource grid
-                            Grid {
-                                width: parent.width
-                                columns: 3
-                                columnSpacing: 6
-                                rowSpacing: 4
+                                // Header row
+                                RowLayout {
+                                    width: parent.width
+                                    spacing: 0
+                                    Text {
+                                        text: "LOCATION"
+                                        color: theme.txtDim
+                                        font { family: theme.mono; pointSize: 7 }
+                                        Layout.fillWidth: true
+                                    }
+                                    Text {
+                                        text: "DEVICES"
+                                        color: theme.txtDim
+                                        font { family: theme.mono; pointSize: 7 }
+                                        Layout.preferredWidth: 64
+                                        horizontalAlignment: Text.AlignRight
+                                    }
+                                    Text {
+                                        text: "REPLIC."
+                                        color: theme.txtDim
+                                        font { family: theme.mono; pointSize: 7 }
+                                        Layout.preferredWidth: 64
+                                        horizontalAlignment: Text.AlignRight
+                                    }
+                                    Text {
+                                        text: "RSRC"
+                                        color: theme.txtDim
+                                        font { family: theme.mono; pointSize: 7 }
+                                        Layout.preferredWidth: 48
+                                        horizontalAlignment: Text.AlignRight
+                                    }
+                                }
+
+                                Rectangle {
+                                    width: parent.width; height: 1
+                                    color: theme.border
+                                }
 
                                 Repeater {
-                                    model: {
-                                        var res = modelData.resources || {}
-                                        return ["carbon","silicates","structural","conductive","rares","volatiles"].map(
-                                            function(r) { return { name: r, level: res[r] || "none" } }
-                                        )
-                                    }
+                                    model: backend.systemMap
 
                                     Rectangle {
-                                        id: resCell
-                                        property string resName: modelData.name
-                                        property string resLevel: modelData.level
-                                        width: (beltList.width - 28) / 3
-                                        height: 26
-                                        color: "transparent"
-                                        border.color: theme.border
+                                        property string locCode: modelData.location
+                                                              || modelData.designation
+                                                              || modelData.code || ""
+                                        property int devCount: modelData.device_count
+                                                            || modelData.devices || 0
+                                        property int repCount: modelData.replicant_count
+                                                            || modelData.replicants || 0
+                                        property int resCount: {
+                                            var r = modelData.resource_count
+                                                 || modelData.resources
+                                            if (typeof r === "number") return r
+                                            if (r && typeof r === "object") return Object.keys(r).length
+                                            return 0
+                                        }
+                                        property bool isHere: locCode === backend.location
+                                                           || locCode.indexOf(backend.location) === 0
+
+                                        width: scanContent.width
+                                        height: 24
+                                        color: isHere ? "#0d1a0e" : "transparent"
+                                        border.color: isHere ? theme.border : "transparent"
                                         border.width: 1
 
                                         RowLayout {
-                                            anchors { fill: parent; leftMargin: 5; rightMargin: 5 }
-                                            spacing: 4
+                                            anchors { fill: parent; leftMargin: 4; rightMargin: 4 }
+                                            spacing: 0
                                             Text {
-                                                text: resCell.resName.substring(0, 4).toUpperCase()
-                                                color: resCell.resLevel === "high"   ? theme.txtBright
-                                                     : resCell.resLevel === "low"    ? theme.txtMid
-                                                     : theme.txtDim
+                                                text: (isHere ? "▸ " : "  ") + locCode.toUpperCase()
+                                                color: isHere ? theme.txtBright : theme.txtMid
                                                 font { family: theme.mono; pointSize: 8 }
+                                                Layout.fillWidth: true
+                                                elide: Text.ElideRight
+                                            }
+                                            Text {
+                                                text: devCount > 0 ? devCount : "—"
+                                                color: devCount > 0 ? theme.txtAmber : theme.txtDim
+                                                font { family: theme.mono; pointSize: 8 }
+                                                Layout.preferredWidth: 64
+                                                horizontalAlignment: Text.AlignRight
+                                            }
+                                            Text {
+                                                text: repCount > 0 ? repCount : "—"
+                                                color: repCount > 0 ? theme.txtAccent : theme.txtDim
+                                                font { family: theme.mono; pointSize: 8 }
+                                                Layout.preferredWidth: 64
+                                                horizontalAlignment: Text.AlignRight
+                                            }
+                                            Text {
+                                                text: resCount > 0 ? resCount : "—"
+                                                color: resCount > 0 ? theme.txtMid : theme.txtDim
+                                                font { family: theme.mono; pointSize: 8 }
+                                                Layout.preferredWidth: 48
+                                                horizontalAlignment: Text.AlignRight
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // ── Belts ── //
+                            Text {
+                                text: "── BELTS ────────────────────────────────"
+                                color: theme.txtDim
+                                font { family: theme.mono; pointSize: 8 }
+                                visible: backend.asteroidBelts.length > 0
+                            }
+
+                            Repeater {
+                                model: backend.asteroidBelts
+
+                                Rectangle {
+                                    width: scanContent.width
+                                    color: theme.hover
+                                    border.color: theme.border
+                                    border.width: 1
+                                    height: beltCol.implicitHeight + 16
+
+                                    Column {
+                                        id: beltCol
+                                        anchors { left: parent.left; right: parent.right; top: parent.top; margins: 8 }
+                                        spacing: 6
+
+                                        RowLayout {
+                                            width: parent.width
+                                            Text {
+                                                text: "◈ " + (modelData.designation || "BELT")
+                                                color: theme.txtAccent
+                                                font { family: theme.mono; pointSize: 10; bold: true }
                                                 Layout.fillWidth: true
                                             }
                                             Text {
-                                                text: resCell.resLevel === "none" ? "—" : resCell.resLevel
-                                                color: resCell.resLevel === "high"   ? theme.txtBright
-                                                     : resCell.resLevel === "low"    ? theme.txtAmber
-                                                     : theme.txtDim
-                                                font { family: theme.mono; pointSize: 7 }
+                                                text: (modelData.density || "").toUpperCase()
+                                                color: theme.txtAmber
+                                                font { family: theme.mono; pointSize: 8 }
                                             }
                                         }
 
-                                        MouseArea {
-                                            anchors.fill: parent
-                                            enabled: resCell.resLevel !== "none"
-                                            hoverEnabled: true
-                                            cursorShape: resCell.resLevel !== "none" ? Qt.PointingHandCursor : Qt.ArrowCursor
-                                            onClicked: mineSelectDialog.open(resCell.resName)
-                                            onEntered: resCell.border.color = theme.txtMid
-                                            onExited:  resCell.border.color = theme.border
+                                        Grid {
+                                            width: parent.width
+                                            columns: 3
+                                            columnSpacing: 6
+                                            rowSpacing: 4
+
+                                            Repeater {
+                                                model: {
+                                                    var res = modelData.resources || {}
+                                                    return ["carbon","silicates","structural","conductive","rares","volatiles"].map(
+                                                        function(r) { return { name: r, level: res[r] || "none" } }
+                                                    )
+                                                }
+
+                                                Rectangle {
+                                                    id: resCell
+                                                    property string resName: modelData.name
+                                                    property string resLevel: modelData.level
+                                                    width: (scanContent.width - 28) / 3
+                                                    height: 26
+                                                    color: "transparent"
+                                                    border.color: theme.border
+                                                    border.width: 1
+
+                                                    RowLayout {
+                                                        anchors { fill: parent; leftMargin: 5; rightMargin: 5 }
+                                                        spacing: 4
+                                                        Text {
+                                                            text: resCell.resName.substring(0, 4).toUpperCase()
+                                                            color: resCell.resLevel === "high"   ? theme.txtBright
+                                                                 : resCell.resLevel === "low"    ? theme.txtMid
+                                                                 : theme.txtDim
+                                                            font { family: theme.mono; pointSize: 8 }
+                                                            Layout.fillWidth: true
+                                                        }
+                                                        Text {
+                                                            text: resCell.resLevel === "none" ? "—" : resCell.resLevel
+                                                            color: resCell.resLevel === "high"   ? theme.txtBright
+                                                                 : resCell.resLevel === "low"    ? theme.txtAmber
+                                                                 : theme.txtDim
+                                                            font { family: theme.mono; pointSize: 7 }
+                                                        }
+                                                    }
+
+                                                    MouseArea {
+                                                        anchors.fill: parent
+                                                        enabled: resCell.resLevel !== "none"
+                                                        hoverEnabled: true
+                                                        cursorShape: resCell.resLevel !== "none" ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                                        onClicked: mineSelectDialog.open(resCell.resName)
+                                                        onEntered: resCell.border.color = theme.txtMid
+                                                        onExited:  resCell.border.color = theme.border
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // ── Asteroid Threats ── //
+                            Text {
+                                text: "── ASTEROID THREATS ─────────────────────"
+                                color: theme.txtRed
+                                font { family: theme.mono; pointSize: 8 }
+                                topPadding: backend.asteroidBelts.length > 0 ? 4 : 0
+                            }
+
+                            Text {
+                                visible: {
+                                    var a = backend.asteroids
+                                    for (var i = 0; i < a.length; i++) if (a[i].impact_target) return false
+                                    return true
+                                }
+                                text: backend.asteroids.length === 0
+                                      ? "no data — press [ ASTEROIDS ] to check"
+                                      : "no active threats in this system"
+                                color: theme.txtDim
+                                font { family: theme.mono; pointSize: 8 }
+                                leftPadding: 8
+                            }
+
+                            Repeater {
+                                model: backend.asteroids.filter(function(a) { return !!a.impact_target })
+
+                                Rectangle {
+                                    id: asteroidDelegate
+                                    property var asteroid: modelData
+                                    width: scanContent.width
+                                    color: theme.hover
+                                    border.color: theme.txtRed
+                                    border.width: 1
+                                    height: asteroidCol.implicitHeight + 16
+
+                                    Column {
+                                        id: asteroidCol
+                                        anchors { left: parent.left; right: parent.right; top: parent.top; margins: 8 }
+                                        spacing: 6
+
+                                        // Header
+                                        RowLayout {
+                                            width: parent.width
+                                            spacing: 8
+                                            Text {
+                                                text: "⚠ " + (modelData.designation || "ASTEROID")
+                                                color: theme.txtRed
+                                                font { family: theme.mono; pointSize: 10; bold: true }
+                                                Layout.fillWidth: true
+                                            }
+                                            Text {
+                                                text: (modelData.size_class || "").toUpperCase()
+                                                color: theme.txtAmber
+                                                font { family: theme.mono; pointSize: 8 }
+                                            }
+                                        }
+
+                                        // Target + ETA
+                                        RowLayout {
+                                            width: parent.width
+                                            spacing: 16
+                                            Text {
+                                                text: "TARGET  " + (modelData.impact_target || "—")
+                                                color: theme.txtBright
+                                                font { family: theme.mono; pointSize: 8 }
+                                            }
+                                            Text {
+                                                text: "ETA  " + (modelData.impact_eta || "—")
+                                                color: theme.txtAmber
+                                                font { family: theme.mono; pointSize: 8 }
+                                            }
+                                            Item { Layout.fillWidth: true }
+                                            Text {
+                                                text: (modelData.active_plates || 0) + " PLATE"
+                                                      + ((modelData.active_plates || 0) !== 1 ? "S" : "") + " ACTIVE"
+                                                color: (modelData.active_plates || 0) > 0 ? theme.txtMid : theme.txtDim
+                                                font { family: theme.mono; pointSize: 8 }
+                                            }
+                                        }
+
+                                        // Progress bar
+                                        RowLayout {
+                                            width: parent.width
+                                            spacing: 8
+                                            Rectangle {
+                                                Layout.fillWidth: true
+                                                height: 8
+                                                color: "#060c07"
+                                                border.color: theme.border; border.width: 1
+                                                Rectangle {
+                                                    width: Math.max(0, Math.min(1, (modelData.progress_pct || 0) / 100)) * parent.width
+                                                    height: parent.height
+                                                    color: (modelData.progress_pct || 0) >= 75 ? theme.txtBright
+                                                         : (modelData.progress_pct || 0) >= 40 ? theme.txtAmber
+                                                         : theme.txtRed
+                                                }
+                                            }
+                                            Text {
+                                                text: (modelData.progress_pct || 0).toFixed(1) + "%"
+                                                color: theme.txtMid
+                                                font { family: theme.mono; pointSize: 8 }
+                                                Layout.preferredWidth: 42
+                                            }
+                                        }
+                                        Text {
+                                            text: "STRENGTH  " + (modelData.current_progress || 0)
+                                                  + " / " + (modelData.required_strength || "?")
+                                            color: theme.txtDim
+                                            font { family: theme.mono; pointSize: 7 }
+                                        }
+
+                                        // Per-surge-plate action rows
+                                        Repeater {
+                                            model: backend.devices.filter(function(d) {
+                                                return (d.device_type || "").indexOf("surge") !== -1
+                                                    || (d.device_type || "").indexOf("propulsor") !== -1
+                                            })
+                                            RowLayout {
+                                                width: asteroidCol.width
+                                                spacing: 6
+                                                Text {
+                                                    text: (modelData.device_type || "PLATE").toUpperCase().replace(/_/g, " ")
+                                                          + "  " + (modelData.device_code || "")
+                                                    color: theme.txtDim
+                                                    font { family: theme.mono; pointSize: 8 }
+                                                    Layout.fillWidth: true
+                                                }
+                                                ActionBtn {
+                                                    property bool atAsteroid: (modelData.location || "") === (asteroidDelegate.asteroid.designation || "")
+                                                    property bool isActive: (modelData.status || "").toLowerCase() === "active"
+                                                    label: atAsteroid
+                                                           ? (isActive ? "[ RUNNING ]" : "[ ACTIVATE ]")
+                                                           : "[ SEND ]"
+                                                    enabled: !isActive
+                                                    width: 90; height: 24
+                                                    onActivated: {
+                                                        if (atAsteroid)
+                                                            backend.activateDevice(modelData.device_code)
+                                                        else
+                                                            backend.travelDevice(modelData.device_code,
+                                                                                 asteroidDelegate.asteroid.designation || "")
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
-                    }
-
-                    Text {
-                        visible: beltList.count === 0
-                        anchors.centerIn: parent
-                        text: "no scan data — press [ SCAN SYSTEM ]"
-                        color: theme.txtDim
-                        font { family: theme.mono; pointSize: 9 }
                     }
                 }
 
@@ -1558,6 +1886,450 @@ Window {
                     }
                 }
 
+                // ── Relay tab ── //
+                ColumnLayout {
+                    visible: centerPanel.activeTab === "relay"
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    spacing: 4
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Text {
+                            text: "FTL RELAY NETWORK"
+                            color: theme.txtAccent
+                            font { family: theme.mono; pointSize: 10; bold: true }
+                            Layout.fillWidth: true
+                        }
+                        ActionBtn {
+                            label: "[ ↺ REFRESH ALL ]"
+                            width: 130; height: 24
+                            onActivated: {
+                                var d = backend.devices
+                                for (var i = 0; i < d.length; i++)
+                                    if ((d[i].device_type || "").indexOf("relay") !== -1)
+                                        backend.fetchRelayNetwork(d[i].device_code)
+                            }
+                        }
+                    }
+
+                    Rectangle { Layout.fillWidth: true; height: 1; color: theme.border }
+
+                    Flickable {
+                        id: relayFlickable
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        contentHeight: relayContent.implicitHeight
+                        clip: true
+                        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+
+                        Column {
+                            id: relayContent
+                            width: relayFlickable.width
+                            spacing: 8
+
+                            Repeater {
+                                model: backend.devices.filter(function(d) {
+                                    return (d.device_type || "").indexOf("relay") !== -1
+                                })
+
+                                Rectangle {
+                                    id: relayCard
+                                    property var relay: modelData
+                                    property var netData: {
+                                        var nets = backend.relayNetworks
+                                        for (var i = 0; i < nets.length; i++)
+                                            if (nets[i].relay_code === modelData.device_code) return nets[i]
+                                        return null
+                                    }
+                                    width: relayContent.width
+                                    color: theme.hover
+                                    border.color: (modelData.status || "").toLowerCase() === "active"
+                                                  ? theme.txtMid : theme.border
+                                    border.width: 1
+                                    height: relayCardCol.implicitHeight + 16
+
+                                    Column {
+                                        id: relayCardCol
+                                        anchors { left: parent.left; right: parent.right; top: parent.top; margins: 8 }
+                                        spacing: 6
+
+                                        RowLayout {
+                                            width: parent.width
+                                            spacing: 8
+                                            Text {
+                                                text: "◈ " + (modelData.device_type || "RELAY").toUpperCase().replace(/_/g, " ")
+                                                color: theme.txtAccent
+                                                font { family: theme.mono; pointSize: 10; bold: true }
+                                                Layout.fillWidth: true
+                                            }
+                                            Text {
+                                                text: relayCard.netData ? relayCard.netData.status.toUpperCase() : (modelData.status || "").toUpperCase()
+                                                color: (modelData.status || "").toLowerCase() === "active"
+                                                       ? theme.txtBright : theme.txtAmber
+                                                font { family: theme.mono; pointSize: 8 }
+                                            }
+                                        }
+
+                                        Text {
+                                            text: "CODE  " + (modelData.device_code || "—")
+                                                  + "   LOC  " + (modelData.location || "—")
+                                            color: theme.txtDim
+                                            font { family: theme.mono; pointSize: 8 }
+                                            width: parent.width; elide: Text.ElideRight
+                                        }
+
+                                        Text {
+                                            visible: relayCard.netData !== null && relayCard.netData.range_ly !== undefined
+                                            text: "RANGE  " + (relayCard.netData ? (relayCard.netData.range_ly || "?") : "?") + " LY"
+                                            color: theme.txtDim
+                                            font { family: theme.mono; pointSize: 8 }
+                                        }
+
+                                        // Connections
+                                        Column {
+                                            width: parent.width
+                                            spacing: 3
+                                            visible: relayCard.netData !== null
+                                                     && (relayCard.netData.connections || []).length > 0
+
+                                            Text {
+                                                text: "── CONNECTIONS"
+                                                color: theme.txtDim
+                                                font { family: theme.mono; pointSize: 7 }
+                                            }
+
+                                            Repeater {
+                                                model: relayCard.netData ? (relayCard.netData.connections || []) : []
+                                                RowLayout {
+                                                    width: relayCardCol.width
+                                                    spacing: 8
+                                                    Text {
+                                                        text: "◉ " + (modelData.star_name || modelData.device_code || "RELAY")
+                                                        color: theme.txtMid
+                                                        font { family: theme.mono; pointSize: 8 }
+                                                        Layout.fillWidth: true
+                                                        elide: Text.ElideRight
+                                                    }
+                                                    Text {
+                                                        text: modelData.device_code || ""
+                                                        color: theme.txtDim
+                                                        font { family: theme.mono; pointSize: 7 }
+                                                    }
+                                                    Text {
+                                                        text: modelData.distance_ly !== undefined
+                                                              ? Number(modelData.distance_ly).toFixed(2) + " LY"
+                                                              : (modelData.distance !== undefined
+                                                                 ? Number(modelData.distance).toFixed(2) + " LY" : "")
+                                                        color: theme.txtAmber
+                                                        font { family: theme.mono; pointSize: 8 }
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        Text {
+                                            visible: relayCard.netData !== null
+                                                     && (relayCard.netData.connections || []).length === 0
+                                            text: "no connections detected"
+                                            color: theme.txtDim
+                                            font { family: theme.mono; pointSize: 8 }
+                                            leftPadding: 8
+                                        }
+
+                                        Text {
+                                            visible: relayCard.netData === null
+                                            text: "press [ REFRESH ] to load network data"
+                                            color: theme.txtDim
+                                            font { family: theme.mono; pointSize: 8 }
+                                            leftPadding: 8
+                                        }
+
+                                        RowLayout {
+                                            width: parent.width
+                                            spacing: 4
+                                            ActionBtn {
+                                                label: "[ ACTIVATE ]"
+                                                Layout.fillWidth: true; height: 24
+                                                enabled: (modelData.status || "").toLowerCase() !== "active"
+                                                onActivated: backend.activateRelay(modelData.device_code)
+                                            }
+                                            ActionBtn {
+                                                label: "[ ↺ NETWORK ]"
+                                                Layout.fillWidth: true; height: 24
+                                                onActivated: backend.fetchRelayNetwork(modelData.device_code)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // ── Beacon tab ── //
+                ColumnLayout {
+                    id: beaconTab
+                    visible: centerPanel.activeTab === "beacon"
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    spacing: 4
+
+                    property string selectedBeacon: ""
+                    property string dtFilter: ""
+                    property string repFilter: ""
+
+                    // Auto-select first beacon when devices load
+                    Connections {
+                        target: backend
+                        function onDevicesChanged() {
+                            if (beaconTab.selectedBeacon === "") {
+                                var d = backend.devices
+                                for (var i = 0; i < d.length; i++) {
+                                    if ((d[i].device_type || "").indexOf("beacon") !== -1) {
+                                        beaconTab.selectedBeacon = d[i].device_code
+                                        break
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Beacon selector chips
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 4
+                        Text {
+                            text: "BEACON:"
+                            color: theme.txtDim
+                            font { family: theme.mono; pointSize: 8 }
+                        }
+                        Repeater {
+                            model: backend.devices.filter(function(d) {
+                                return (d.device_type || "").indexOf("beacon") !== -1
+                            })
+                            Rectangle {
+                                property bool selected: beaconTab.selectedBeacon === modelData.device_code
+                                height: 22; width: bcChipLbl.implicitWidth + 14
+                                color: selected ? theme.hover : "transparent"
+                                border.color: selected ? theme.txtMid : theme.border
+                                border.width: 1
+                                Text {
+                                    id: bcChipLbl
+                                    anchors.centerIn: parent
+                                    text: modelData.device_code || "BEACON"
+                                    color: parent.selected ? theme.txtBright : theme.txtMid
+                                    font { family: theme.mono; pointSize: 7 }
+                                }
+                                MouseArea {
+                                    anchors.fill: parent
+                                    onClicked: beaconTab.selectedBeacon = modelData.device_code
+                                }
+                            }
+                        }
+                        Item { Layout.fillWidth: true }
+                    }
+
+                    // Filters + fetch row
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 6
+
+                        Text {
+                            text: "TYPE:"
+                            color: theme.txtDim
+                            font { family: theme.mono; pointSize: 8 }
+                        }
+                        Rectangle {
+                            width: 120; height: 24
+                            color: "#060c07"; border.color: theme.border; border.width: 1
+                            Text {
+                                anchors { fill: parent; leftMargin: 6 }
+                                verticalAlignment: Text.AlignVCenter
+                                text: "any"
+                                color: theme.txtDim
+                                font { family: theme.mono; pointSize: 8 }
+                                visible: bcDtInput.text === ""
+                            }
+                            TextInput {
+                                id: bcDtInput
+                                anchors { fill: parent; leftMargin: 6 }
+                                verticalAlignment: TextInput.AlignVCenter
+                                color: theme.txtBright
+                                font { family: theme.mono; pointSize: 8 }
+                                onTextChanged: beaconTab.dtFilter = text.trim().toLowerCase()
+                            }
+                        }
+
+                        Text {
+                            text: "REPLICANT:"
+                            color: theme.txtDim
+                            font { family: theme.mono; pointSize: 8 }
+                        }
+                        Rectangle {
+                            width: 120; height: 24
+                            color: "#060c07"; border.color: theme.border; border.width: 1
+                            Text {
+                                anchors { fill: parent; leftMargin: 6 }
+                                verticalAlignment: Text.AlignVCenter
+                                text: "any"
+                                color: theme.txtDim
+                                font { family: theme.mono; pointSize: 8 }
+                                visible: bcRepInput.text === ""
+                            }
+                            TextInput {
+                                id: bcRepInput
+                                anchors { fill: parent; leftMargin: 6 }
+                                verticalAlignment: TextInput.AlignVCenter
+                                color: theme.txtBright
+                                font { family: theme.mono; pointSize: 8 }
+                                onTextChanged: beaconTab.repFilter = text.trim()
+                            }
+                        }
+
+                        ActionBtn {
+                            label: "[ FETCH ]"
+                            width: 72; height: 24
+                            enabled: beaconTab.selectedBeacon !== ""
+                            onActivated: backend.fetchBeaconAudit(beaconTab.selectedBeacon,
+                                                                  beaconTab.dtFilter,
+                                                                  beaconTab.repFilter)
+                        }
+
+                        Item { Layout.fillWidth: true }
+
+                        Text {
+                            text: backend.beaconAudit.length + " ENTRIES"
+                            visible: backend.beaconAudit.length > 0
+                            color: theme.txtDim
+                            font { family: theme.mono; pointSize: 8 }
+                        }
+                    }
+
+                    Rectangle { Layout.fillWidth: true; height: 1; color: theme.border }
+
+                    // Column headers
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 0
+                        Text {
+                            text: " "
+                            color: theme.txtDim
+                            font { family: theme.mono; pointSize: 7 }
+                            Layout.preferredWidth: 18
+                        }
+                        Text {
+                            text: "TYPE"
+                            color: theme.txtDim
+                            font { family: theme.mono; pointSize: 7 }
+                            Layout.fillWidth: true
+                        }
+                        Text {
+                            text: "REPLICANT"
+                            color: theme.txtDim
+                            font { family: theme.mono; pointSize: 7 }
+                            Layout.preferredWidth: 90
+                        }
+                        Text {
+                            text: "LOCATION"
+                            color: theme.txtDim
+                            font { family: theme.mono; pointSize: 7 }
+                            Layout.preferredWidth: 100
+                        }
+                        Text {
+                            text: "TIME"
+                            color: theme.txtDim
+                            font { family: theme.mono; pointSize: 7 }
+                            Layout.preferredWidth: 80
+                        }
+                    }
+
+                    // Audit log
+                    ListView {
+                        id: beaconAuditList
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        model: backend.beaconAudit
+                        clip: true
+                        spacing: 0
+
+                        delegate: Rectangle {
+                            property bool isDeparture: (modelData.travel_type || "") === "departure"
+                            width: beaconAuditList.width
+                            height: 26
+                            color: index % 2 === 0 ? "transparent" : "#050b05"
+
+                            RowLayout {
+                                anchors { fill: parent; leftMargin: 2; rightMargin: 2 }
+                                spacing: 0
+                                Text {
+                                    text: isDeparture ? "↑" : "↓"
+                                    color: isDeparture ? theme.txtRed : theme.txtBright
+                                    font { family: theme.mono; pointSize: 9 }
+                                    Layout.preferredWidth: 18
+                                }
+                                Text {
+                                    text: (modelData.device_type || "UNKNOWN").replace(/_/g, " ")
+                                    color: theme.txtMid
+                                    font { family: theme.mono; pointSize: 8 }
+                                    elide: Text.ElideRight
+                                    Layout.fillWidth: true
+                                }
+                                Text {
+                                    text: modelData.replicant_code || "—"
+                                    color: modelData.replicant_code === backend.replicantCode
+                                           ? theme.txtAccent : theme.txtDim
+                                    font { family: theme.mono; pointSize: 7 }
+                                    Layout.preferredWidth: 90
+                                    elide: Text.ElideRight
+                                }
+                                Text {
+                                    text: (modelData.location || "—").toUpperCase()
+                                    color: theme.txtDim
+                                    font { family: theme.mono; pointSize: 7 }
+                                    Layout.preferredWidth: 100
+                                    elide: Text.ElideRight
+                                }
+                                Text {
+                                    text: {
+                                        var t = modelData.logged_at || ""
+                                        if (!t) return "—"
+                                        return t.length > 16 ? t.substring(0, 16) : t
+                                    }
+                                    color: theme.txtDim
+                                    font { family: theme.mono; pointSize: 7 }
+                                    Layout.preferredWidth: 80
+                                }
+                            }
+
+                            Rectangle {
+                                anchors.bottom: parent.bottom
+                                width: parent.width; height: 1
+                                color: theme.border; opacity: 0.3
+                            }
+                        }
+
+                        Text {
+                            visible: beaconAuditList.count === 0
+                            anchors.centerIn: parent
+                            text: beaconTab.selectedBeacon === ""
+                                  ? "no beacon selected"
+                                  : "press [ FETCH ] to load audit log"
+                            color: theme.txtDim
+                            font { family: theme.mono; pointSize: 9 }
+                        }
+                    }
+
+                    // Load more
+                    ActionBtn {
+                        label: "[ LOAD MORE ]"
+                        Layout.fillWidth: true
+                        height: 26
+                        visible: backend.beaconAuditHasMore
+                        onActivated: backend.fetchBeaconAuditMore()
+                    }
+                }
+
                 // ── Messages tab ── //
                 ColumnLayout {
                     visible: centerPanel.activeTab === "messages"
@@ -1599,8 +2371,7 @@ Window {
 
                         delegate: Rectangle {
                             id: msgDelegate
-                            property bool isRead: !!modelData.read ||
-                                (modelData.read_at !== undefined && modelData.read_at !== null)
+                            property bool isRead: !!modelData.read || !!(modelData.read_at)
                             width: messageList.width
                             height: msgCol.implicitHeight + 16
                             color: isRead ? "transparent" : theme.hover
@@ -1874,6 +2645,25 @@ Window {
                             Layout.fillWidth: true
                         }
 
+                        // Hub integrity
+                        Text {
+                            property real integ: {
+                                var m = modelData
+                                if (m.integrity !== undefined)     return m.integrity
+                                if (m.integrity_pct !== undefined) return m.integrity_pct
+                                if (m.health !== undefined)        return m.health
+                                if (m.health_pct !== undefined)    return m.health_pct
+                                return -1
+                            }
+                            visible: (modelData.device_type || "").indexOf("hub") !== -1
+                                     && integ >= 0
+                            text: "INTEG  " + Math.round(integ) + "%"
+                            color: integ < 30 ? theme.txtRed
+                                 : integ < 60 ? theme.txtAmber
+                                 : theme.txtMid
+                            font { family: theme.mono; pointSize: 8 }
+                        }
+
                         Item { Layout.fillHeight: true }
 
                         // Vessel / carrier actions
@@ -1906,6 +2696,15 @@ Window {
                                 Layout.fillWidth: true; height: 22
                                 onActivated: backend.vesselUnload(modelData.device_code)
                             }
+                        }
+
+                        // Vessel mining cancel
+                        ActionBtn {
+                            label: "[ STOP MINING ]"
+                            Layout.fillWidth: true; height: 22
+                            visible: (modelData.device_type || "").indexOf("vessel") !== -1
+                                     && devCard.devStatus === "mining"
+                            onActivated: backend.stopMining()
                         }
 
                         // Surge plate taxi/manual config
@@ -1951,6 +2750,60 @@ Window {
                             }
                         }
 
+                        // FTL Relay actions
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 4
+                            visible: (modelData.device_type || "").indexOf("relay") !== -1
+                                     && devCard.devStatus !== "stowed"
+
+                            ActionBtn {
+                                label: "[ ACTIVATE ]"
+                                Layout.fillWidth: true; height: 22
+                                enabled: devCard.devStatus !== "active"
+                                onActivated: backend.activateRelay(modelData.device_code)
+                            }
+                            ActionBtn {
+                                label: "[ NETWORK ]"
+                                Layout.fillWidth: true; height: 22
+                                onActivated: {
+                                    backend.fetchRelayNetwork(modelData.device_code)
+                                    centerPanel.activeTab = "relay"
+                                }
+                            }
+                        }
+
+                        // System Hub actions
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 4
+                            visible: (modelData.device_type || "").indexOf("hub") !== -1
+                                     && devCard.devStatus !== "stowed"
+
+                            ActionBtn {
+                                label: "[ TRAVEL… ]"
+                                Layout.fillWidth: true; height: 22
+                                onActivated: {
+                                    deviceTravelDialog.deviceCode = modelData.device_code
+                                    deviceTravelDialog.open()
+                                }
+                            }
+                            ActionBtn {
+                                label: "[ ACTIVATE ]"
+                                Layout.fillWidth: true; height: 22
+                                enabled: devCard.devStatus !== "active"
+                                onActivated: backend.activateHub(modelData.device_code)
+                            }
+                            ActionBtn {
+                                label: "[ MSG… ]"
+                                Layout.fillWidth: true; height: 22
+                                onActivated: {
+                                    hubMsgDialog.hubCode = modelData.device_code
+                                    hubMsgDialog.open()
+                                }
+                            }
+                        }
+
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: 4
@@ -1959,6 +2812,8 @@ Window {
                                 visible: (modelData.device_type || "").indexOf("vessel") === -1
                                          && (modelData.device_type || "").indexOf("transport") === -1
                                          && (modelData.device_type || "").indexOf("controller") === -1
+                                         && (modelData.device_type || "").indexOf("relay") === -1
+                                         && (modelData.device_type || "").indexOf("hub") === -1
                                 label: devCard.devStatus === "stowed" ? "[ DEPLOY ]" : "[ STOW ]"
                                 Layout.fillWidth: true
                                 height: 22
@@ -2597,6 +3452,75 @@ Window {
                 width: parent.width
                 height: 26
                 onActivated: mineSiteDialog.close()
+            }
+        }
+    }
+
+    // System Hub welcome message dialog
+    Rectangle {
+        id: hubMsgDialog
+        property string hubCode: ""
+        function open() { hubMsgInput.text = ""; visible = true; hubMsgInput.forceActiveFocus() }
+        function close() { visible = false }
+
+        visible: false
+        anchors.centerIn: parent
+        width: 460; height: 180
+        color: "#0b160c"
+        border.color: theme.txtMid; border.width: 1
+        z: 50; radius: 2
+
+        Column {
+            anchors { fill: parent; margins: 16 }
+            spacing: 12
+
+            Text {
+                text: "SET HUB WELCOME MESSAGE"
+                color: theme.txtAccent
+                font { family: theme.mono; pointSize: 10; bold: true }
+            }
+
+            Text {
+                text: "max 500 characters"
+                color: theme.txtDim
+                font { family: theme.mono; pointSize: 8 }
+            }
+
+            Rectangle {
+                width: parent.width; height: 54
+                color: "#060c07"; border.color: theme.border; border.width: 1
+
+                TextEdit {
+                    id: hubMsgInput
+                    anchors { fill: parent; margins: 8 }
+                    color: theme.txtBright
+                    font { family: theme.mono; pointSize: 9 }
+                    wrapMode: TextEdit.WrapAtWordBoundaryOrAnywhere
+                    Keys.onEscapePressed: hubMsgDialog.close()
+                }
+            }
+
+            RowLayout {
+                width: parent.width; spacing: 8
+                Text {
+                    text: hubMsgInput.text.length + " / 500"
+                    color: hubMsgInput.text.length > 480 ? theme.txtAmber : theme.txtDim
+                    font { family: theme.mono; pointSize: 8 }
+                }
+                Item { Layout.fillWidth: true }
+                ActionBtn {
+                    label: "[ SET ]"; width: 80; height: 28
+                    enabled: hubMsgInput.text.trim().length > 0
+                             && hubMsgInput.text.length <= 500
+                    onActivated: {
+                        backend.setHubWelcomeMessage(hubMsgDialog.hubCode, hubMsgInput.text.trim())
+                        hubMsgDialog.close()
+                    }
+                }
+                ActionBtn {
+                    label: "[ CANCEL ]"; width: 90; height: 28
+                    onActivated: hubMsgDialog.close()
+                }
             }
         }
     }

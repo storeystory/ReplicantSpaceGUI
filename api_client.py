@@ -57,6 +57,9 @@ class ApiClient:
     def replicate(self, code: str) -> dict:
         return self._post(f"/replicants/{code}/replicate")
 
+    def stop_mine(self, code: str) -> dict:
+        return self._delete(f"/replicants/{code}/mine")
+
     # --- Devices ---
 
     def get_device(self, code: str) -> dict:
@@ -86,8 +89,41 @@ class ApiClient:
     def get_location_inventory(self, location_code: str) -> dict:
         return self._get(f"/locations/{location_code}/inventory")
 
+    def get_inventory(self, star: str | None = None, location: str | None = None) -> dict:
+        params: dict = {}
+        if star:
+            params["star"] = star
+        if location:
+            params["location"] = location
+        return self._get("/inventory", params or None)
+
     def get_location_asteroids(self, location_code: str) -> list:
         return self._get(f"/locations/{location_code}/asteroids")
+
+    def get_system_map(self, location_code: str) -> dict:
+        return self._get(f"/locations/{location_code}/system-map")
+
+    # --- FTL Beacons ---
+
+    def get_beacon_audit(self, beacon_code: str, cursor: int | None = None,
+                         limit: int = 20, latest: bool = True,
+                         device_type: str | None = None,
+                         replicant_code: str | None = None) -> dict:
+        params: dict = {"limit": limit}
+        if cursor is not None:
+            params["cursor"] = cursor
+        elif latest:
+            params["latest"] = "true"
+        if device_type:
+            params["device_type"] = device_type
+        if replicant_code:
+            params["replicant_code"] = replicant_code
+        return self._get(f"/devices/{beacon_code}/audit", params)
+
+    # --- FTL Relays ---
+
+    def get_relay_network(self, relay_code: str) -> dict:
+        return self._get(f"/devices/{relay_code}/network")
 
     # --- Messages ---
 
@@ -102,7 +138,7 @@ class ApiClient:
 
     def mark_messages_read(self, ids: list | None = None, mark_all: bool = False) -> dict:
         body = {"mark_all": True} if mark_all else {"ids": ids or []}
-        return self._post("/messages/read", body)
+        return self._patch("/messages", body)
 
     # --- Trading ---
 
@@ -132,6 +168,16 @@ class ApiClient:
 
     def _post(self, path: str, data: dict | None = None):
         resp = self._session.post(f"{self.base_url}{path}", json=data or {}, timeout=15)
+        self._raise_for_status(resp)
+        return resp.json()
+
+    def _patch(self, path: str, data: dict | None = None):
+        resp = self._session.patch(f"{self.base_url}{path}", json=data or {}, timeout=15)
+        self._raise_for_status(resp)
+        return resp.json()
+
+    def _delete(self, path: str):
+        resp = self._session.delete(f"{self.base_url}{path}", timeout=15)
         self._raise_for_status(resp)
         return resp.json()
 
