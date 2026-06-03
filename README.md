@@ -5,4 +5,4 @@ Then, `pip install PySide6 requests`, then from the project directory `python ma
 
 Proper built releases to come!
 
-Built in Qt Creator with the help of a local LLM. I use AI as a tool -- it's not doing all the work for me, and I never commit/run code that I don't fully understand.
+Built in Qt Creator with the help of an LLM. I use AI as a tool -- it's not doing all the work for me, and I never commit/run code that I don't fully understand.
