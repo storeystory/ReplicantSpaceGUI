@@ -120,10 +120,22 @@ class ApiClient:
             params["replicant_code"] = replicant_code
         return self._get(f"/devices/{beacon_code}/audit", params)
 
-    # --- FTL Relays ---
+    # --- FTL Relays / BobNet ---
 
     def get_relay_network(self, relay_code: str) -> dict:
         return self._get(f"/devices/{relay_code}/network")
+
+    def get_bobnet_messages(self, relay_code: str, limit: int = 50,
+                            latest: bool = True, include_npcs: bool = True) -> dict:
+        return self._get(f"/devices/{relay_code}/messages", {
+            "limit": limit,
+            "latest": "true" if latest else "false",
+            "include_npcs": "true" if include_npcs else "false",
+        })
+
+    def send_bobnet_message(self, replicant_code: str, channel: str, text: str) -> dict:
+        return self._post(f"/replicants/{replicant_code}/message",
+                          {"channel": channel, "text": text})
 
     # --- Messages ---
 
@@ -138,7 +150,7 @@ class ApiClient:
 
     def mark_messages_read(self, ids: list | None = None, mark_all: bool = False) -> dict:
         body = {"mark_all": True} if mark_all else {"ids": ids or []}
-        return self._patch("/messages", body)
+        return self._post("/messages/read", body)
 
     # --- Trading ---
 

@@ -85,3 +85,4 @@ config.json
 .uic/
 /build*/
 /.qtcreator/
+.claude/

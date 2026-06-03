@@ -376,99 +376,118 @@ Window {
                 spacing: 4
 
                 // Tab bar
-                RowLayout {
-                    spacing: 4
+                Flickable {
                     Layout.fillWidth: true
+                    height: 24
+                    contentWidth: tabRow.implicitWidth
+                    flickableDirection: Flickable.HorizontalFlick
+                    clip: true
 
-                    ActionBtn {
-                        label: centerPanel.activeTab === "stars" ? "[ NEARBY STARS ]" : "  NEARBY STARS  "
-                        height: 24
-                        width: 130
-                        onActivated: centerPanel.activeTab = "stars"
-                    }
-                    ActionBtn {
-                        label: centerPanel.activeTab === "system" ? "[ SYSTEM SCAN ]" : "  SYSTEM SCAN  "
-                        height: 24
-                        width: 120
-                        onActivated: { centerPanel.activeTab = "system"; backend.fetchAsteroids(); backend.fetchSystemMap() }
-                    }
-                    ActionBtn {
-                        label: centerPanel.activeTab === "blueprints" ? "[ BLUEPRINTS ]" : "  BLUEPRINTS  "
-                        height: 24
-                        width: 110
-                        onActivated: centerPanel.activeTab = "blueprints"
-                    }
-                    ActionBtn {
-                        label: centerPanel.activeTab === "inventory" ? "[ INVENTORY ]" : "  INVENTORY  "
-                        height: 24
-                        width: 110
-                        onActivated: { centerPanel.activeTab = "inventory"; backend.fetchInventory() }
-                    }
-                    ActionBtn {
-                        label: centerPanel.activeTab === "trade" ? "[ TRADE ]" : "  TRADE  "
-                        height: 24
-                        width: 90
-                        onActivated: { centerPanel.activeTab = "trade"; backend.fetchTraders() }
-                    }
-                    ActionBtn {
-                        label: centerPanel.activeTab === "survey" ? "[ SURVEY ]" : "  SURVEY  "
-                        height: 24
-                        width: 90
-                        onActivated: centerPanel.activeTab = "survey"
-                    }
-                    ActionBtn {
-                        visible: {
-                            var d = backend.devices
-                            for (var i = 0; i < d.length; i++)
-                                if ((d[i].device_type || "").indexOf("controller") !== -1) return true
-                            return false
+                    Row {
+                        id: tabRow
+                        spacing: 4
+
+                        ActionBtn {
+                            label: centerPanel.activeTab === "stars" ? "[ NEARBY STARS ]" : "  NEARBY STARS  "
+                            height: 24
+                            width: 130
+                            onActivated: centerPanel.activeTab = "stars"
                         }
-                        label: centerPanel.activeTab === "ami" ? "[ AMI ]" : "  AMI  "
-                        height: 24
-                        width: 72
-                        onActivated: centerPanel.activeTab = "ami"
-                    }
-                    ActionBtn {
-                        visible: {
-                            var d = backend.devices
-                            for (var i = 0; i < d.length; i++)
-                                if ((d[i].device_type || "").indexOf("relay") !== -1) return true
-                            return false
+                        ActionBtn {
+                            label: centerPanel.activeTab === "system" ? "[ SYSTEM SCAN ]" : "  SYSTEM SCAN  "
+                            height: 24
+                            width: 120
+                            onActivated: { centerPanel.activeTab = "system"; backend.fetchAsteroids(); backend.fetchSystemMap() }
                         }
-                        label: centerPanel.activeTab === "relay" ? "[ RELAY ]" : "  RELAY  "
-                        height: 24
-                        width: 80
-                        onActivated: {
-                            centerPanel.activeTab = "relay"
-                            var d = backend.devices
-                            for (var i = 0; i < d.length; i++)
-                                if ((d[i].device_type || "").indexOf("relay") !== -1)
-                                    backend.fetchRelayNetwork(d[i].device_code)
+                        ActionBtn {
+                            label: centerPanel.activeTab === "blueprints" ? "[ BLUEPRINTS ]" : "  BLUEPRINTS  "
+                            height: 24
+                            width: 110
+                            onActivated: centerPanel.activeTab = "blueprints"
+                        }
+                        ActionBtn {
+                            label: centerPanel.activeTab === "inventory" ? "[ INVENTORY ]" : "  INVENTORY  "
+                            height: 24
+                            width: 110
+                            onActivated: { centerPanel.activeTab = "inventory"; backend.fetchInventory() }
+                        }
+                        ActionBtn {
+                            label: centerPanel.activeTab === "trade" ? "[ TRADE ]" : "  TRADE  "
+                            height: 24
+                            width: 90
+                            onActivated: { centerPanel.activeTab = "trade"; backend.fetchTraders() }
+                        }
+                        ActionBtn {
+                            label: centerPanel.activeTab === "survey" ? "[ SURVEY ]" : "  SURVEY  "
+                            height: 24
+                            width: 90
+                            onActivated: centerPanel.activeTab = "survey"
+                        }
+                        ActionBtn {
+                            visible: {
+                                var d = backend.devices
+                                for (var i = 0; i < d.length; i++)
+                                    if ((d[i].device_type || "").indexOf("controller") !== -1) return true
+                                return false
+                            }
+                            label: centerPanel.activeTab === "ami" ? "[ AMI ]" : "  AMI  "
+                            height: 24
+                            width: 72
+                            onActivated: centerPanel.activeTab = "ami"
+                        }
+                        ActionBtn {
+                            visible: {
+                                var d = backend.devices
+                                for (var i = 0; i < d.length; i++)
+                                    if ((d[i].device_type || "").indexOf("relay") !== -1) return true
+                                return false
+                            }
+                            label: centerPanel.activeTab === "relay" ? "[ RELAY ]" : "  RELAY  "
+                            height: 24
+                            width: 80
+                            onActivated: {
+                                centerPanel.activeTab = "relay"
+                                var d = backend.devices
+                                for (var i = 0; i < d.length; i++)
+                                    if ((d[i].device_type || "").indexOf("relay") !== -1)
+                                        backend.fetchRelayNetwork(d[i].device_code)
+                            }
+                        }
+                        ActionBtn {
+                            visible: {
+                                var d = backend.devices
+                                for (var i = 0; i < d.length; i++)
+                                    if ((d[i].device_type || "").indexOf("relay") !== -1) return true
+                                return false
+                            }
+                            label: centerPanel.activeTab === "bobnet" ? "[ BOBNET ]" : "  BOBNET  "
+                            height: 24
+                            width: 90
+                            onActivated: centerPanel.activeTab = "bobnet"
+                        }
+                        ActionBtn {
+                            visible: {
+                                var d = backend.devices
+                                for (var i = 0; i < d.length; i++)
+                                    if ((d[i].device_type || "").indexOf("beacon") !== -1) return true
+                                return false
+                            }
+                            label: centerPanel.activeTab === "beacon" ? "[ BEACON ]" : "  BEACON  "
+                            height: 24
+                            width: 90
+                            onActivated: centerPanel.activeTab = "beacon"
+                        }
+                        ActionBtn {
+                            label: centerPanel.activeTab === "messages"
+                                   ? "[ MESSAGES ]"
+                                   : backend.unreadCount > 0
+                                     ? "  MSG (" + backend.unreadCount + ")  "
+                                     : "  MESSAGES  "
+                            height: 24
+                            width: 115
+                            onActivated: { centerPanel.activeTab = "messages"; backend.fetchMessages() }
                         }
                     }
-                    ActionBtn {
-                        visible: {
-                            var d = backend.devices
-                            for (var i = 0; i < d.length; i++)
-                                if ((d[i].device_type || "").indexOf("beacon") !== -1) return true
-                            return false
-                        }
-                        label: centerPanel.activeTab === "beacon" ? "[ BEACON ]" : "  BEACON  "
-                        height: 24
-                        width: 90
-                        onActivated: centerPanel.activeTab = "beacon"
-                    }
-                    ActionBtn {
-                        label: centerPanel.activeTab === "messages"
-                               ? "[ MESSAGES ]"
-                               : backend.unreadCount > 0
-                                 ? "  MSG (" + backend.unreadCount + ")  "
-                                 : "  MESSAGES  "
-                        height: 24
-                        width: 115
-                        onActivated: { centerPanel.activeTab = "messages"; backend.fetchMessages() }
-                    }
-                    Item { Layout.fillWidth: true }
                 }
 
                 Rectangle { Layout.fillWidth: true; height: 1; color: theme.border }
@@ -1886,6 +1905,272 @@ Window {
                     }
                 }
 
+                // ── BobNet tab ── //
+                ColumnLayout {
+                    id: bobnetTab
+                    visible: centerPanel.activeTab === "bobnet"
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    spacing: 4
+
+                    property string selectedRelay: ""
+                    property string selectedChannel: "#general"
+
+                    // Auto-select first relay and fetch when tab becomes visible
+                    onVisibleChanged: {
+                        if (visible && selectedRelay === "") {
+                            var d = backend.devices
+                            for (var i = 0; i < d.length; i++) {
+                                if ((d[i].device_type || "").indexOf("relay") !== -1) {
+                                    bobnetTab.selectedRelay = d[i].device_code
+                                    backend.fetchBobnetMessages(bobnetTab.selectedRelay)
+                                    break
+                                }
+                            }
+                        } else if (visible && selectedRelay !== "") {
+                            backend.fetchBobnetMessages(selectedRelay)
+                        }
+                    }
+
+                    // Auto-poll every 30s while tab is open
+                    Timer {
+                        running: centerPanel.activeTab === "bobnet"
+                                 && bobnetTab.selectedRelay !== ""
+                        interval: 30000
+                        repeat: true
+                        onTriggered: backend.fetchBobnetMessages(bobnetTab.selectedRelay)
+                    }
+
+                    // ── Relay selector (if multiple) + refresh ── //
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 4
+
+                        Text {
+                            text: "RELAY:"
+                            color: theme.txtDim
+                            font { family: theme.mono; pointSize: 8 }
+                        }
+
+                        Repeater {
+                            model: backend.devices.filter(function(d) {
+                                return (d.device_type || "").indexOf("relay") !== -1
+                            })
+                            Rectangle {
+                                property bool sel: bobnetTab.selectedRelay === modelData.device_code
+                                height: 22; width: bnRelayLbl.implicitWidth + 14
+                                color: sel ? theme.hover : "transparent"
+                                border.color: sel ? theme.txtMid : theme.border
+                                border.width: 1
+                                Text {
+                                    id: bnRelayLbl
+                                    anchors.centerIn: parent
+                                    text: modelData.device_code || "RELAY"
+                                    color: parent.sel ? theme.txtBright : theme.txtMid
+                                    font { family: theme.mono; pointSize: 7 }
+                                }
+                                MouseArea {
+                                    anchors.fill: parent
+                                    onClicked: {
+                                        bobnetTab.selectedRelay = modelData.device_code
+                                        backend.fetchBobnetMessages(modelData.device_code)
+                                    }
+                                }
+                            }
+                        }
+
+                        Item { Layout.fillWidth: true }
+
+                        Text {
+                            text: backend.bobnetMessages.length + " MSG"
+                            visible: backend.bobnetMessages.length > 0
+                            color: theme.txtDim
+                            font { family: theme.mono; pointSize: 8 }
+                        }
+
+                        ActionBtn {
+                            label: "[ ↺ ]"
+                            width: 36; height: 24
+                            onActivated: {
+                                if (bobnetTab.selectedRelay)
+                                    backend.fetchBobnetMessages(bobnetTab.selectedRelay)
+                            }
+                        }
+                    }
+
+                    // ── Channel chips ── //
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 4
+
+                        Text {
+                            text: "CHANNEL:"
+                            color: theme.txtDim
+                            font { family: theme.mono; pointSize: 8 }
+                        }
+
+                        Repeater {
+                            model: {
+                                var seen = {"#general": true, "#trade": true}
+                                var channels = ["#general", "#trade"]
+                                var msgs = backend.bobnetMessages
+                                for (var i = 0; i < msgs.length; i++) {
+                                    var ch = msgs[i].channel || ""
+                                    if (ch && !seen[ch]) { seen[ch] = true; channels.push(ch) }
+                                }
+                                return channels
+                            }
+                            Rectangle {
+                                property bool sel: bobnetTab.selectedChannel === modelData
+                                height: 22; width: bnChLbl.implicitWidth + 14
+                                color: sel ? theme.hover : "transparent"
+                                border.color: sel ? theme.txtMid : theme.border
+                                border.width: 1
+                                Text {
+                                    id: bnChLbl
+                                    anchors.centerIn: parent
+                                    text: modelData
+                                    color: parent.sel ? theme.txtBright : theme.txtMid
+                                    font { family: theme.mono; pointSize: 8 }
+                                }
+                                MouseArea {
+                                    anchors.fill: parent
+                                    onClicked: bobnetTab.selectedChannel = modelData
+                                }
+                            }
+                        }
+
+                        Item { Layout.fillWidth: true }
+                    }
+
+                    Rectangle { Layout.fillWidth: true; height: 1; color: theme.border }
+
+                    // ── Chat log (newest at bottom, BottomToTop) ── //
+                    ListView {
+                        id: bobnetList
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        model: backend.bobnetMessages.filter(function(m) {
+                            return (m.channel || "") === bobnetTab.selectedChannel
+                        })
+                        verticalLayoutDirection: ListView.BottomToTop
+                        clip: true
+                        spacing: 2
+
+                        delegate: Column {
+                            width: bobnetList.width
+                            spacing: 2
+
+                            // Sender line
+                            RowLayout {
+                                width: parent.width
+                                spacing: 8
+                                Text {
+                                    text: (modelData.replicant_name || "UNKNOWN").toUpperCase()
+                                    color: (modelData.replicant_code || "") === backend.replicantCode
+                                           ? theme.txtAccent : theme.txtBright
+                                    font { family: theme.mono; pointSize: 8; bold: true }
+                                    Layout.fillWidth: true
+                                    elide: Text.ElideRight
+                                }
+                                Text {
+                                    text: (modelData.current_star || "").toUpperCase()
+                                    color: theme.txtDim
+                                    font { family: theme.mono; pointSize: 7 }
+                                }
+                                Text {
+                                    text: {
+                                        var t = modelData.time || ""
+                                        return t.length > 16 ? t.substring(0, 16) : t
+                                    }
+                                    color: theme.txtDim
+                                    font { family: theme.mono; pointSize: 7 }
+                                }
+                            }
+
+                            // Message body
+                            Text {
+                                width: parent.width
+                                text: modelData.message || ""
+                                color: theme.txtMid
+                                font { family: theme.mono; pointSize: 9 }
+                                wrapMode: Text.WrapAtWordBoundaryOrAnywhere
+                                leftPadding: 8
+                            }
+
+                            Rectangle {
+                                width: parent.width; height: 1
+                                color: theme.border; opacity: 0.4
+                            }
+                        }
+
+                        Text {
+                            visible: bobnetList.count === 0
+                            anchors.centerIn: parent
+                            text: bobnetTab.selectedRelay === ""
+                                  ? "no relay selected"
+                                  : "no messages on " + bobnetTab.selectedChannel
+                            color: theme.txtDim
+                            font { family: theme.mono; pointSize: 9 }
+                        }
+                    }
+
+                    // ── Send row ── //
+                    Rectangle { Layout.fillWidth: true; height: 1; color: theme.border }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 6
+
+                        Text {
+                            text: bobnetTab.selectedChannel
+                            color: theme.txtDim
+                            font { family: theme.mono; pointSize: 8 }
+                        }
+
+                        Rectangle {
+                            Layout.fillWidth: true
+                            height: 28
+                            color: "#060c07"
+                            border.color: bnInput.activeFocus ? theme.txtMid : theme.border
+                            border.width: 1
+
+                            Text {
+                                anchors { fill: parent; leftMargin: 8 }
+                                verticalAlignment: Text.AlignVCenter
+                                text: "message…"
+                                color: theme.txtDim
+                                font { family: theme.mono; pointSize: 9 }
+                                visible: bnInput.text === ""
+                            }
+                            TextInput {
+                                id: bnInput
+                                anchors { fill: parent; leftMargin: 8; rightMargin: 8 }
+                                verticalAlignment: TextInput.AlignVCenter
+                                color: theme.txtBright
+                                font { family: theme.mono; pointSize: 9 }
+                                Keys.onReturnPressed: {
+                                    if (text.trim() !== "" && bobnetTab.selectedRelay !== "") {
+                                        backend.sendBobnetMessage(bobnetTab.selectedChannel, text.trim())
+                                        text = ""
+                                    }
+                                }
+                            }
+                        }
+
+                        ActionBtn {
+                            label: "[ SEND ]"
+                            width: 72; height: 28
+                            enabled: bnInput.text.trim() !== ""
+                                     && bobnetTab.selectedRelay !== ""
+                            onActivated: {
+                                backend.sendBobnetMessage(bobnetTab.selectedChannel, bnInput.text.trim())
+                                bnInput.text = ""
+                            }
+                        }
+                    }
+                }
+
                 // ── Relay tab ── //
                 ColumnLayout {
                     visible: centerPanel.activeTab === "relay"
@@ -2365,26 +2650,19 @@ Window {
                         id: messageList
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        model: backend.messages
+                        model: backend.messages.filter(function(m) {
+                            return !m.read && !m.read_at
+                        })
                         clip: true
                         spacing: 4
 
                         delegate: Rectangle {
                             id: msgDelegate
-                            property bool isRead: !!modelData.read || !!(modelData.read_at)
                             width: messageList.width
                             height: msgCol.implicitHeight + 16
-                            color: isRead ? "transparent" : theme.hover
-                            border.color: isRead ? theme.border : theme.txtDim
+                            color: theme.hover
+                            border.color: theme.txtDim
                             border.width: 1
-
-                            MouseArea {
-                                anchors.fill: parent
-                                onClicked: {
-                                    if (!msgDelegate.isRead && modelData.id !== undefined)
-                                        backend.markMessageRead(modelData.id)
-                                }
-                            }
 
                             Column {
                                 id: msgCol
@@ -2393,11 +2671,12 @@ Window {
 
                                 RowLayout {
                                     width: parent.width
+                                    spacing: 6
                                     Text {
                                         text: (modelData.from || modelData.sender ||
                                                modelData.from_replicant || "SYSTEM").toUpperCase()
-                                        color: msgDelegate.isRead ? theme.txtMid : theme.txtBright
-                                        font { family: theme.mono; pointSize: 9; bold: !msgDelegate.isRead }
+                                        color: theme.txtBright
+                                        font { family: theme.mono; pointSize: 9; bold: true }
                                         Layout.fillWidth: true
                                         elide: Text.ElideRight
                                     }
@@ -2406,14 +2685,22 @@ Window {
                                         color: theme.txtDim
                                         font { family: theme.mono; pointSize: 7 }
                                     }
+                                    ActionBtn {
+                                        label: "[ ✓ ]"
+                                        width: 36; height: 20
+                                        onActivated: {
+                                            if (modelData.id !== undefined)
+                                                backend.markMessageRead(modelData.id)
+                                        }
+                                    }
                                 }
 
                                 Text {
                                     visible: (modelData.subject || "") !== ""
                                     width: parent.width
                                     text: modelData.subject || ""
-                                    color: msgDelegate.isRead ? theme.txtMid : theme.txtAccent
-                                    font { family: theme.mono; pointSize: 8; bold: !msgDelegate.isRead }
+                                    color: theme.txtAccent
+                                    font { family: theme.mono; pointSize: 8; bold: true }
                                     wrapMode: Text.WrapAtWordBoundaryOrAnywhere
                                 }
 
@@ -2421,7 +2708,7 @@ Window {
                                     visible: (modelData.body || modelData.message || modelData.content || "") !== ""
                                     width: parent.width
                                     text: modelData.body || modelData.message || modelData.content || ""
-                                    color: msgDelegate.isRead ? theme.txtDim : theme.txtMid
+                                    color: theme.txtMid
                                     font { family: theme.mono; pointSize: 8 }
                                     wrapMode: Text.WrapAtWordBoundaryOrAnywhere
                                 }
@@ -2431,7 +2718,7 @@ Window {
                         Text {
                             visible: messageList.count === 0
                             anchors.centerIn: parent
-                            text: "no messages"
+                            text: backend.messages.length > 0 ? "all caught up" : "no messages"
                             color: theme.txtDim
                             font { family: theme.mono; pointSize: 9 }
                         }
@@ -2812,7 +3099,6 @@ Window {
                                 visible: (modelData.device_type || "").indexOf("vessel") === -1
                                          && (modelData.device_type || "").indexOf("transport") === -1
                                          && (modelData.device_type || "").indexOf("controller") === -1
-                                         && (modelData.device_type || "").indexOf("relay") === -1
                                          && (modelData.device_type || "").indexOf("hub") === -1
                                 label: devCard.devStatus === "stowed" ? "[ DEPLOY ]" : "[ STOW ]"
                                 Layout.fillWidth: true

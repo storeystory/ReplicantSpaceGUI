@@ -43,6 +43,7 @@ class Backend(QObject):
     systemMapChanged = Signal()
     beaconAuditChanged = Signal()
     relayNetworkChanged = Signal()
+    bobnetMessagesChanged = Signal()
     scanComplete = Signal()
     statusChanged = Signal()
     errorOccurred = Signal(str)
@@ -75,6 +76,8 @@ class Backend(QObject):
         self._beacon_code_last: str = ""
         self._beacon_audit_cursor: int | None = None
         self._relay_networks: dict = {}
+        self._bobnet_messages: list = []
+        self._bobnet_relay_code: str = ""
         self._status: str = "IDLE"
 
         self._live_workers: list = []
@@ -163,6 +166,10 @@ class Backend(QObject):
     def systemMap(self) -> list:
         return self._system_map
 
+    @Property('QVariantList', notify=bobnetMessagesChanged)
+    def bobnetMessages(self) -> list:
+        return self._bobnet_messages
+
     @Property('QVariantList', notify=beaconAuditChanged)
     def beaconAudit(self) -> list:
         return self._beacon_audit
@@ -200,15 +207,13 @@ class Backend(QObject):
         self._dispatch("messages",  self._client.get_messages, 50)
         loc = self._replicant.get("location", "")
         if loc:
-            star = loc.split("-")[0]
-            self._dispatch("inventory", self._client.get_inventory, star)
+            self._dispatch("inventory", self._client.get_location_inventory, loc)
 
     @Slot()
     def fetchInventory(self):
         loc = self._replicant.get("location", "")
         if loc:
-            star = loc.split("-")[0]
-            self._dispatch("inventory", self._client.get_inventory, star)
+            self._dispatch("inventory", self._client.get_location_inventory, loc)
         else:
             self.toastMessage.emit("warn", "Location unknown — sync first")
 
@@ -397,6 +402,22 @@ class Backend(QObject):
         self._dispatch("action:ami_directive", self._client.device_command,
                        controller_code, "set_directive",
                        {"directive": "belt_search", "configuration": {}})
+
+    # ── BobNet slots ─────────────────────────────────────────────────────── #
+
+    @Slot(str)
+    def fetchBobnetMessages(self, relay_code: str):
+        if not relay_code:
+            return
+        self._bobnet_relay_code = relay_code
+        self._dispatch("bobnet_messages", self._client.get_bobnet_messages, relay_code)
+
+    @Slot(str, str)
+    def sendBobnetMessage(self, channel: str, text: str):
+        if not text.strip():
+            return
+        self._dispatch("action:bobnet_send", self._client.send_bobnet_message,
+                       self._code, channel, text.strip())
 
     # ── FTL Beacon slots ────────────────────────────────────────────────── #
 
@@ -633,6 +654,20 @@ class Backend(QObject):
             else:
                 self._beacon_audit = self._beacon_audit + entries
             self.beaconAuditChanged.emit()
+        elif key == "bobnet_messages":
+            msgs: list = data if isinstance(data, list) else []
+            if isinstance(data, dict):
+                for k in ("messages", "items", "results", "data"):
+                    if k in data and isinstance(data[k], list):
+                        msgs = data[k]
+                        break
+            self._bobnet_messages = msgs
+            self.bobnetMessagesChanged.emit()
+        elif key == "action:bobnet_send":
+            self._set_status("IDLE")
+            if self._bobnet_relay_code:
+                self._dispatch("bobnet_messages", self._client.get_bobnet_messages,
+                               self._bobnet_relay_code)
         elif key.startswith("relay_network:"):
             relay_code = key.split(":", 1)[1]
             if isinstance(data, dict):
