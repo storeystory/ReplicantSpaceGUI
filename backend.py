@@ -46,6 +46,7 @@ class Backend(QObject):
     bobnetMessagesChanged = Signal()
     accountReplicantsChanged = Signal()
     locationsOverviewChanged = Signal()
+    moonsByPlanetChanged = Signal()
     scanComplete = Signal()
     statusChanged = Signal()
     errorOccurred = Signal(str)
@@ -203,6 +204,10 @@ class Backend(QObject):
     @Property('QVariantList', notify=locationsOverviewChanged)
     def locationsOverview(self) -> list:
         return self._locations_overview
+
+    @Property('QVariantList', notify=moonsByPlanetChanged)
+    def moonsByPlanet(self) -> list:
+        return [{"planet": k, "moons": v} for k, v in self._moons_by_planet.items()]
 
     @Property(str, notify=statusChanged)
     def status(self) -> str:
@@ -513,6 +518,18 @@ class Backend(QObject):
         self._dispatch("locations_overview", self._client.get_locations)
 
     @Slot()
+    def fetchPlanetMoons(self):
+        for planet in self._planets:
+            if not isinstance(planet, dict):
+                continue
+            if (planet.get("moon_count") or 0) < 1:
+                continue
+            desig = planet.get("designation", "")
+            if desig:
+                self._dispatch(f"planet_moons:{desig}",
+                               self._client.get_location, desig)
+
+    @Slot()
     def fetchAccountReplicants(self):
         self._dispatch("account", self._client.get_account)
 
@@ -612,6 +629,7 @@ class Backend(QObject):
         self._relay_networks = {}
         self._bobnet_messages = []
         self._bobnet_relay_code = ""
+        self._moons_by_planet: dict = {}
         self._status = "IDLE"
         if emit:
             for sig in (self.replicantChanged, self.eventsChanged, self.devicesChanged,
@@ -751,6 +769,15 @@ class Backend(QObject):
                         break
             self._bobnet_messages = msgs
             self.bobnetMessagesChanged.emit()
+        elif key.startswith("planet_moons:"):
+            desig = key.split(":", 1)[1]
+            moons = []
+            if isinstance(data, dict):
+                moons = data.get("moons") or []
+                if not isinstance(moons, list):
+                    moons = []
+            self._moons_by_planet[desig] = moons
+            self.moonsByPlanetChanged.emit()
         elif key == "locations_overview":
             raw = data.get("locations", {}) if isinstance(data, dict) else {}
             rows = [
@@ -789,7 +816,9 @@ class Backend(QObject):
             self._asteroid_belts = belts
             self.asteroidBeltsChanged.emit()
             self._planets = data.get("planets", []) if isinstance(data, dict) else []
+            self._moons_by_planet = {}
             self.planetsChanged.emit()
+            self.moonsByPlanetChanged.emit()
             self.scanComplete.emit()
             self._set_status("IDLE")
             n = len(belts)
@@ -797,6 +826,7 @@ class Backend(QObject):
             self.refresh()
             self.fetchAsteroids()
             self.fetchSystemMap()
+            self.fetchPlanetMoons()
         elif key == "traders":
             self._traders = self._to_list(data)
             self.tradersChanged.emit()

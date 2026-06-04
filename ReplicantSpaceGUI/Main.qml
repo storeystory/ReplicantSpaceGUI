@@ -1508,6 +1508,7 @@ Window {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     spacing: 4
+                    onVisibleChanged: if (visible && backend.planets.length > 0) backend.fetchPlanetMoons()
 
                     Text {
                         visible: {
@@ -1651,6 +1652,93 @@ Window {
                                                 }
                                             }
                                         }
+
+                                        // ── Moons ──
+                                        property var planetMoons: {
+                                            var desig = planetDelegate.planet.designation || ""
+                                            var mbp = backend.moonsByPlanet
+                                            for (var i = 0; i < mbp.length; i++)
+                                                if (mbp[i].planet === desig) return mbp[i].moons
+                                            return []
+                                        }
+
+                                        Repeater {
+                                            model: planetCol.planetMoons
+                                            Column {
+                                                width: planetCol.width
+                                                spacing: 3
+
+                                                Rectangle {
+                                                    width: parent.width; height: 1
+                                                    color: theme.border
+                                                }
+
+                                                RowLayout {
+                                                    width: parent.width
+                                                    spacing: 6
+                                                    Text {
+                                                        text: "◌ " + (modelData.designation || modelData.name || "MOON")
+                                                        color: theme.txtMid
+                                                        font { family: theme.mono; pointSize: 8 }
+                                                        Layout.fillWidth: true
+                                                        elide: Text.ElideRight
+                                                    }
+                                                    Text {
+                                                        visible: !!modelData.type
+                                                        text: (modelData.type || "").toUpperCase()
+                                                        color: theme.txtDim
+                                                        font { family: theme.mono; pointSize: 7 }
+                                                    }
+                                                    Text {
+                                                        visible: !!modelData.scanned
+                                                        text: "✓"
+                                                        color: theme.txtAccent
+                                                        font { family: theme.mono; pointSize: 8 }
+                                                    }
+                                                }
+
+                                                Repeater {
+                                                    property var moonData: modelData
+                                                    model: {
+                                                        var drones = []
+                                                        var d = backend.devices
+                                                        for (var i = 0; i < d.length; i++)
+                                                            if ((d[i].device_type || "").indexOf("survey") !== -1)
+                                                                drones.push(d[i])
+                                                        return drones
+                                                    }
+                                                    RowLayout {
+                                                        width: planetCol.width
+                                                        spacing: 6
+                                                        leftPadding: 12
+                                                        Text {
+                                                            text: (modelData.device_type || "DRONE").toUpperCase().replace(/_/g, " ")
+                                                                  + "  " + (modelData.device_code || "")
+                                                            color: theme.txtDim
+                                                            font { family: theme.mono; pointSize: 8 }
+                                                            Layout.fillWidth: true
+                                                        }
+                                                        ActionBtn {
+                                                            property string moonDesig: parent.parent.moonData.designation || parent.parent.moonData.name || ""
+                                                            property bool atMoon: (modelData.location || "") === moonDesig
+                                                            property bool droneBusy: {
+                                                                var s = (modelData.status || "").toLowerCase()
+                                                                return s === "scanning" || s === "active" || s === "busy"
+                                                            }
+                                                            label: atMoon ? (droneBusy ? "[ SCANNING… ]" : "[ SCAN ]") : "[ SEND ]"
+                                                            enabled: !(atMoon && droneBusy) && moonDesig !== ""
+                                                            width: 84; height: 22
+                                                            onActivated: {
+                                                                if (atMoon)
+                                                                    backend.scanWithDevice(modelData.device_code)
+                                                                else
+                                                                    backend.travelDevice(modelData.device_code, moonDesig)
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -1789,12 +1877,42 @@ Window {
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 0
-                        Text { text: "LOCATION      "; color: theme.txtDim; font { family: theme.mono; pointSize: 7 }; Layout.fillWidth: true }
-                        Text { text: "DEV  "; color: theme.txtDim; font { family: theme.mono; pointSize: 7 }; width: 38 }
-                        Text { text: "REP  "; color: theme.txtDim; font { family: theme.mono; pointSize: 7 }; width: 38 }
-                        Text { text: "RES  "; color: theme.txtDim; font { family: theme.mono; pointSize: 7 }; width: 38 }
-                        Text { text: "SITES"; color: theme.txtDim; font { family: theme.mono; pointSize: 7 }; width: 38 }
-                        Text { text: "EVT"; color: theme.txtDim; font { family: theme.mono; pointSize: 7 }; width: 32 }
+                        Text {
+                            text: "LOCATION"
+                            color: theme.txtDim
+                            font { family: theme.mono; pointSize: 7 }
+                            Layout.fillWidth: true
+                        }
+                        Text {
+                            text: "DEV"
+                            color: theme.txtDim
+                            font { family: theme.mono; pointSize: 7 }
+                            width: 38
+                        }
+                        Text {
+                            text: "REP"
+                            color: theme.txtDim
+                            font { family: theme.mono; pointSize: 7 }
+                            width: 38
+                        }
+                        Text {
+                            text: "RES"
+                            color: theme.txtDim
+                            font { family: theme.mono; pointSize: 7 }
+                            width: 38
+                        }
+                        Text {
+                            text: "SITES"
+                            color: theme.txtDim
+                            font { family: theme.mono; pointSize: 7 }
+                            width: 38
+                        }
+                        Text {
+                            text: "EVT"
+                            color: theme.txtDim
+                            font { family: theme.mono; pointSize: 7 }
+                            width: 32
+                        }
                     }
                     Rectangle { Layout.fillWidth: true; height: 1; color: theme.border }
 
@@ -1821,9 +1939,7 @@ Window {
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
-                                onClicked: {
-                                    travelDialog.open()
-                                }
+                                onClicked: travelDialog.openWith(modelData.code)
                             }
 
                             RowLayout {
@@ -3912,6 +4028,7 @@ Window {
         property string placeholder: ""
         signal confirmed(string value)
         function open() { visible = true; dlgInput.text = ""; dlgInput.forceActiveFocus() }
+        function openWith(prefill) { visible = true; dlgInput.text = prefill; dlgInput.selectAll(); dlgInput.forceActiveFocus() }
         function close() { visible = false }
 
         visible: false
