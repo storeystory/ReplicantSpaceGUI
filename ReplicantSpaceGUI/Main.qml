@@ -162,6 +162,12 @@ Window {
             Rectangle { width: 1; height: 28; color: theme.border }
 
             ActionBtn {
+                visible: backend.accountReplicants.length > 0
+                label: "[ SWITCH… ]"
+                width: 90
+                onActivated: replicantPicker.open()
+            }
+            ActionBtn {
                 label: "⟳ SYNC"
                 width: 72
                 onActivated: backend.refresh()
@@ -430,6 +436,12 @@ Window {
                             height: 24
                             width: 90
                             onActivated: centerPanel.activeTab = "survey"
+                        }
+                        ActionBtn {
+                            label: centerPanel.activeTab === "locations" ? "[ LOCATIONS ]" : "  LOCATIONS  "
+                            height: 24
+                            width: 108
+                            onActivated: { centerPanel.activeTab = "locations"; backend.fetchLocationsOverview() }
                         }
                         ActionBtn {
                             visible: {
@@ -1751,6 +1763,123 @@ Window {
                     }
                 }
 
+                // ── Locations overview tab ── //
+                ColumnLayout {
+                    visible: centerPanel.activeTab === "locations"
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    spacing: 4
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Text {
+                            text: "── LOCATIONS (" + backend.locationsOverview.length + ") ──"
+                            color: theme.txtDim
+                            font { family: theme.mono; pointSize: 8 }
+                        }
+                        Item { Layout.fillWidth: true }
+                        ActionBtn {
+                            label: "[ ↺ ]"
+                            width: 36; height: 22
+                            onActivated: backend.fetchLocationsOverview()
+                        }
+                    }
+
+                    // Column headers
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 0
+                        Text { text: "LOCATION      "; color: theme.txtDim; font { family: theme.mono; pointSize: 7 }; Layout.fillWidth: true }
+                        Text { text: "DEV  "; color: theme.txtDim; font { family: theme.mono; pointSize: 7 }; width: 38 }
+                        Text { text: "REP  "; color: theme.txtDim; font { family: theme.mono; pointSize: 7 }; width: 38 }
+                        Text { text: "RES  "; color: theme.txtDim; font { family: theme.mono; pointSize: 7 }; width: 38 }
+                        Text { text: "SITES"; color: theme.txtDim; font { family: theme.mono; pointSize: 7 }; width: 38 }
+                        Text { text: "EVT"; color: theme.txtDim; font { family: theme.mono; pointSize: 7 }; width: 32 }
+                    }
+                    Rectangle { Layout.fillWidth: true; height: 1; color: theme.border }
+
+                    ListView {
+                        id: locationsListView
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        clip: true
+                        model: backend.locationsOverview
+                        spacing: 1
+
+                        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+
+                        delegate: Rectangle {
+                            width: locationsListView.width
+                            height: 26
+                            color: locRowMa.containsMouse ? "#0f1f10" : "transparent"
+                            Behavior on color { ColorAnimation { duration: 100 } }
+
+                            property bool isCurrent: modelData.code === backend.location
+
+                            MouseArea {
+                                id: locRowMa
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    travelDialog.open()
+                                }
+                            }
+
+                            RowLayout {
+                                anchors { fill: parent; leftMargin: 2; rightMargin: 2 }
+                                spacing: 0
+
+                                Text {
+                                    text: (isCurrent ? "▸ " : "  ") + modelData.code
+                                    color: isCurrent ? theme.txtAmber : locRowMa.containsMouse ? theme.txtBright : theme.txtMid
+                                    font { family: theme.mono; pointSize: 8 }
+                                    Layout.fillWidth: true
+                                    elide: Text.ElideRight
+                                }
+                                Text {
+                                    text: (modelData.devices || 0) + "    "
+                                    color: (modelData.devices || 0) > 0 ? theme.txtAccent : theme.txtDim
+                                    font { family: theme.mono; pointSize: 8 }
+                                    width: 38
+                                }
+                                Text {
+                                    text: (modelData.replicants || 0) + "    "
+                                    color: (modelData.replicants || 0) > 0 ? theme.txtBright : theme.txtDim
+                                    font { family: theme.mono; pointSize: 8 }
+                                    width: 38
+                                }
+                                Text {
+                                    text: (modelData.resources || 0) + "    "
+                                    color: theme.txtDim
+                                    font { family: theme.mono; pointSize: 8 }
+                                    width: 38
+                                }
+                                Text {
+                                    text: (modelData.resource_sites || 0) + "    "
+                                    color: theme.txtDim
+                                    font { family: theme.mono; pointSize: 8 }
+                                    width: 38
+                                }
+                                Text {
+                                    text: (modelData.location_events || 0) + ""
+                                    color: (modelData.location_events || 0) > 0 ? theme.txtAmber : theme.txtDim
+                                    font { family: theme.mono; pointSize: 8 }
+                                    width: 32
+                                }
+                            }
+                        }
+                    }
+
+                    Text {
+                        visible: backend.locationsOverview.length === 0
+                        text: "no location data — press ↺ to load"
+                        color: theme.txtDim
+                        font { family: theme.mono; pointSize: 9 }
+                        Layout.alignment: Qt.AlignHCenter
+                    }
+                }
+
                 // ── AMI Controllers tab ── //
                 ColumnLayout {
                     visible: centerPanel.activeTab === "ami"
@@ -2911,7 +3040,6 @@ Window {
                         anchors.fill: parent
                         acceptedButtons: Qt.RightButton
                         onClicked: (mouse) => {
-                            if (!root.hasAutofactory) return
                             deviceContextMenu.targetCode = modelData.device_code || ""
                             deviceContextMenu.targetName = (modelData.device_type || "device")
                                 .toUpperCase().replace(/_/g, " ")
@@ -3236,6 +3364,101 @@ Window {
         }
     }
 
+    // ── Replicant picker overlay ──────────────────────────────────────── //
+
+    Rectangle {
+        id: replicantPicker
+        anchors.fill: parent
+        z: 200
+        color: Qt.rgba(6/255, 12/255, 7/255, 0.97)
+        visible: backend.replicantCode === "" || _open
+
+        property bool _open: false
+        function open()  { backend.fetchAccountReplicants(); _open = true }
+        function close() { if (backend.replicantCode !== "") _open = false }
+
+        Rectangle {
+            anchors.centerIn: parent
+            width: 400
+            color: "#0b160c"
+            border.color: theme.txtAccent
+            border.width: 1
+            radius: 2
+            height: pickerCol.implicitHeight + 48
+
+            ColumnLayout {
+                id: pickerCol
+                anchors { left: parent.left; right: parent.right; top: parent.top; margins: 24 }
+                spacing: 10
+
+                Text {
+                    text: "── SELECT REPLICANT ──────────────────"
+                    color: theme.txtAccent
+                    font { family: theme.mono; pointSize: 10; bold: true }
+                    Layout.fillWidth: true
+                }
+
+                Text {
+                    visible: backend.accountReplicants.length === 0
+                    text: "LOADING ACCOUNT DATA…"
+                    color: theme.txtDim
+                    font { family: theme.mono; pointSize: 9 }
+                    topPadding: 8; bottomPadding: 8
+                }
+
+                Repeater {
+                    model: backend.accountReplicants
+                    delegate: Rectangle {
+                        Layout.fillWidth: true
+                        height: 58
+                        color: cardMa.containsMouse ? "#0f1f10" : "#060c07"
+                        border.color: cardMa.containsMouse ? theme.txtAccent : theme.border
+                        border.width: 1
+                        radius: 2
+
+                        Behavior on color { ColorAnimation { duration: 120 } }
+                        Behavior on border.color { ColorAnimation { duration: 120 } }
+
+                        MouseArea {
+                            id: cardMa
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                backend.switchReplicant(modelData.code)
+                                replicantPicker._open = false
+                            }
+                        }
+
+                        Column {
+                            anchors { verticalCenter: parent.verticalCenter; left: parent.left; leftMargin: 14 }
+                            spacing: 3
+                            Text {
+                                text: (modelData.name || modelData.code).toUpperCase()
+                                color: cardMa.containsMouse ? theme.txtBright : theme.txtAccent
+                                font { family: theme.mono; pointSize: 10; bold: true }
+                            }
+                            Text {
+                                text: "CODE  " + modelData.code
+                                color: theme.txtDim
+                                font { family: theme.mono; pointSize: 8 }
+                            }
+                        }
+                    }
+                }
+
+                Item { height: 4 }
+                ActionBtn {
+                    visible: backend.replicantCode !== ""
+                    label: "[ CANCEL ]"
+                    height: 28
+                    Layout.fillWidth: true
+                    onActivated: replicantPicker.close()
+                }
+            }
+        }
+    }
+
     // ── Profile edit dialog ───────────────────────────────────────────── //
 
     Rectangle {
@@ -3505,11 +3728,122 @@ Window {
         property string targetName: ""
 
         MenuItem {
+            text: "Change Owner…"
+            onTriggered: {
+                changeOwnerDlg.deviceCode = deviceContextMenu.targetCode
+                changeOwnerDlg.deviceName = deviceContextMenu.targetName
+                changeOwnerDlg.open()
+            }
+        }
+        MenuItem {
             text: "Decommission " + deviceContextMenu.targetName + "…"
+            enabled: root.hasAutofactory
             onTriggered: {
                 decommissionConfirmDlg.deviceCode = deviceContextMenu.targetCode
                 decommissionConfirmDlg.deviceName = deviceContextMenu.targetName
                 decommissionConfirmDlg.open()
+            }
+        }
+    }
+
+    Rectangle {
+        id: changeOwnerDlg
+        property string deviceCode: ""
+        property string deviceName: ""
+        property string selectedTarget: ""
+        property string selectedTargetName: ""
+
+        function open() {
+            selectedTarget = ""
+            selectedTargetName = ""
+            backend.fetchAccountReplicants()
+            visible = true
+        }
+        function close() { visible = false }
+
+        visible: false
+        anchors.centerIn: parent
+        width: 360; height: 240
+        color: "#0b160c"
+        border.color: theme.txtMid
+        border.width: 1
+        z: 50
+        radius: 2
+
+        ColumnLayout {
+            anchors { fill: parent; margins: 16 }
+            spacing: 10
+
+            Text {
+                text: "CHANGE OWNER — " + changeOwnerDlg.deviceName
+                color: theme.txtAccent
+                font { family: theme.mono; pointSize: 9; bold: true }
+                elide: Text.ElideRight
+                Layout.fillWidth: true
+            }
+            Text {
+                text: "Transfer to replicant (same account only):"
+                color: theme.txtDim
+                font { family: theme.mono; pointSize: 8 }
+            }
+
+            Flickable {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                clip: true
+                contentHeight: replicantPickerRow.implicitHeight
+                flickableDirection: Flickable.VerticalFlick
+
+                Flow {
+                    id: replicantPickerRow
+                    width: parent.width
+                    spacing: 6
+
+                    Repeater {
+                        model: backend.accountReplicants
+                        ActionBtn {
+                            property bool chosen: changeOwnerDlg.selectedTarget === modelData.code
+                            label: chosen
+                                   ? "[ " + (modelData.name || modelData.code) + " ]"
+                                   : "  " + (modelData.name || modelData.code) + "  "
+                            height: 24
+                            width: implicitWidth + 16
+                            onActivated: {
+                                changeOwnerDlg.selectedTarget = modelData.code
+                                changeOwnerDlg.selectedTargetName = modelData.name || modelData.code
+                            }
+                        }
+                    }
+
+                    Text {
+                        visible: backend.accountReplicants.length === 0
+                        text: "no other replicants on this account"
+                        color: theme.txtDim
+                        font { family: theme.mono; pointSize: 8 }
+                    }
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                ActionBtn {
+                    label: "[ CONFIRM ]"
+                    height: 26
+                    Layout.fillWidth: true
+                    enabled: changeOwnerDlg.selectedTarget !== ""
+                    onActivated: {
+                        backend.changeDeviceOwner(changeOwnerDlg.deviceCode,
+                                                  changeOwnerDlg.selectedTarget)
+                        changeOwnerDlg.close()
+                    }
+                }
+                ActionBtn {
+                    label: "[ CANCEL ]"
+                    height: 26
+                    Layout.fillWidth: true
+                    onActivated: changeOwnerDlg.close()
+                }
             }
         }
     }

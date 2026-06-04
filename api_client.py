@@ -86,6 +86,9 @@ class ApiClient:
 
     # --- Locations ---
 
+    def get_locations(self) -> dict:
+        return self._get("/locations")
+
     def get_location(self, location_code: str) -> dict:
         return self._get(f"/locations/{location_code}")
 

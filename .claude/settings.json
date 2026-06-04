@@ -5,7 +5,10 @@
       "Bash(python -c \"import ast; ast.parse\\(open\\('api_client.py'\\).read\\(\\)\\); ast.parse\\(open\\('backend.py'\\).read\\(\\)\\); print\\('syntax OK'\\)\")",
       "Bash(curl -s \"https://api.replicant.space/swagger/\")",
       "Bash(python -c \"import ast; ast.parse\\(open\\('backend.py'\\).read\\(\\)\\); ast.parse\\(open\\('api_client.py'\\).read\\(\\)\\); print\\('OK'\\)\")",
-      "Bash(python -c \"import ast; ast.parse\\(open\\('backend.py'\\).read\\(\\)\\); ast.parse\\(open\\('api_client.py'\\).read\\(\\)\\); print\\('Python OK'\\)\")"
+      "Bash(python -c \"import ast; ast.parse\\(open\\('backend.py'\\).read\\(\\)\\); ast.parse\\(open\\('api_client.py'\\).read\\(\\)\\); print\\('Python OK'\\)\")",
+      "Bash(curl -s \"https://api.replicant.space/swagger/openapi.json\")",
+      "Bash(python3 -c \"import json,sys; spec=json.load\\(sys.stdin\\); path=spec['paths'].get\\('/locations',{}\\); print\\(json.dumps\\(path, indent=2\\)\\)\")",
+      "Bash(python3 -c ' *)"
     ]
   }
 }

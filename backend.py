@@ -44,6 +44,8 @@ class Backend(QObject):
     beaconAuditChanged = Signal()
     relayNetworkChanged = Signal()
     bobnetMessagesChanged = Signal()
+    accountReplicantsChanged = Signal()
+    locationsOverviewChanged = Signal()
     scanComplete = Signal()
     statusChanged = Signal()
     errorOccurred = Signal(str)
@@ -58,27 +60,10 @@ class Backend(QObject):
         )
         self._code = config.get("replicant_code", "")
 
-        self._replicant: dict = {}
-        self._events: list = []
-        self._devices: list = []
-        self._stars: list = []
-        self._asteroid_belts: list = []
-        self._planets: list = []
+        # account-level state (persists across replicant switches)
         self._blueprints: list = []
-        self._inventory: list = []
-        self._messages: list = []
-        self._unread_count: int = 0
-        self._traders: list = []
-        self._shop_trades: list = []
-        self._asteroids: list = []
-        self._system_map: list = []
-        self._beacon_audit: list = []
-        self._beacon_code_last: str = ""
-        self._beacon_audit_cursor: int | None = None
-        self._relay_networks: dict = {}
-        self._bobnet_messages: list = []
-        self._bobnet_relay_code: str = ""
-        self._status: str = "IDLE"
+        self._account_replicants: list = []
+        self._locations_overview: list = []
 
         self._live_workers: list = []
 
@@ -86,9 +71,12 @@ class Backend(QObject):
         self._poll_timer.timeout.connect(self.refresh)
         self._poll_timer.start(30_000)
 
+        self._reset_state(emit=False)
+
+        self._dispatch("blueprints", self._client.get_blueprints)
+        self._dispatch("account", self._client.get_account)
         if self._code:
             self.refresh()
-        self._dispatch("blueprints", self._client.get_blueprints)
 
     # ------------------------------------------------------------------ #
     # QML-facing properties
@@ -207,6 +195,14 @@ class Backend(QObject):
              "status": v.get("status", "")}
             for k, v in self._relay_networks.items()
         ]
+
+    @Property('QVariantList', notify=accountReplicantsChanged)
+    def accountReplicants(self) -> list:
+        return self._account_replicants
+
+    @Property('QVariantList', notify=locationsOverviewChanged)
+    def locationsOverview(self) -> list:
+        return self._locations_overview
 
     @Property(str, notify=statusChanged)
     def status(self) -> str:
@@ -513,6 +509,28 @@ class Backend(QObject):
                        device_code, "decommission")
 
     @Slot()
+    def fetchLocationsOverview(self):
+        self._dispatch("locations_overview", self._client.get_locations)
+
+    @Slot()
+    def fetchAccountReplicants(self):
+        self._dispatch("account", self._client.get_account)
+
+    @Slot(str)
+    def switchReplicant(self, code: str):
+        if not code or code == self._code:
+            return
+        self._code = code
+        self._reset_state()
+        self.refresh()
+
+    @Slot(str, str)
+    def changeDeviceOwner(self, device_code: str, target_code: str):
+        self._set_status("TRANSFERRING…")
+        self._dispatch("action:change_owner", self._client.device_command,
+                       device_code, "change_owner", {"target": target_code})
+
+    @Slot()
     def fetchTraders(self):
         self._dispatch("traders", self._client.get_traders, self._code)
 
@@ -573,6 +591,35 @@ class Backend(QObject):
         self._live_workers.append(worker)
         worker.finished.connect(lambda w=worker: self._live_workers.remove(w) if w in self._live_workers else None)
         worker.start()
+
+    def _reset_state(self, emit: bool = True):
+        self._replicant = {}
+        self._events = []
+        self._devices = []
+        self._stars = []
+        self._asteroid_belts = []
+        self._planets = []
+        self._inventory = []
+        self._messages = []
+        self._unread_count = 0
+        self._traders = []
+        self._shop_trades = []
+        self._asteroids = []
+        self._system_map = []
+        self._beacon_audit = []
+        self._beacon_code_last = ""
+        self._beacon_audit_cursor = None
+        self._relay_networks = {}
+        self._bobnet_messages = []
+        self._bobnet_relay_code = ""
+        self._status = "IDLE"
+        if emit:
+            for sig in (self.replicantChanged, self.eventsChanged, self.devicesChanged,
+                        self.starsChanged, self.asteroidBeltsChanged, self.planetsChanged,
+                        self.inventoryChanged, self.messagesChanged, self.unreadCountChanged,
+                        self.asteroidsChanged, self.systemMapChanged, self.beaconAuditChanged,
+                        self.relayNetworkChanged, self.bobnetMessagesChanged, self.statusChanged):
+                sig.emit()
 
     def _set_status(self, text: str):
         self._status = text
@@ -704,6 +751,29 @@ class Backend(QObject):
                         break
             self._bobnet_messages = msgs
             self.bobnetMessagesChanged.emit()
+        elif key == "locations_overview":
+            raw = data.get("locations", {}) if isinstance(data, dict) else {}
+            rows = [
+                {"code": code, **counts}
+                for code, counts in raw.items()
+                if isinstance(counts, dict)
+            ]
+            rows.sort(key=lambda r: r.get("devices", 0), reverse=True)
+            self._locations_overview = rows
+            self.locationsOverviewChanged.emit()
+        elif key == "account":
+            reps = []
+            if isinstance(data, dict):
+                raw = data.get("replicants", [])
+                for r in (raw if isinstance(raw, list) else []):
+                    if isinstance(r, dict):
+                        reps.append({"code": r.get("code", ""), "name": r.get("name", r.get("code", ""))})
+                    elif isinstance(r, str):
+                        reps.append({"code": r, "name": r})
+            # When no replicant is selected yet, show all (startup picker).
+            # When one is active, filter it out (switcher only shows others).
+            self._account_replicants = reps if not self._code else [r for r in reps if r["code"] != self._code]
+            self.accountReplicantsChanged.emit()
         elif key == "action:bobnet_send":
             self._set_status("IDLE")
             if self._bobnet_relay_code:
@@ -767,6 +837,11 @@ class Backend(QObject):
             self.refresh()
 
     def _on_error(self, key: str, error: str):
+        # Asteroid lookup fails silently — many systems have none
+        if key == "asteroids":
+            self._asteroids = []
+            self.asteroidsChanged.emit()
+            return
         self._set_status("ERROR")
         short_key = key.split(":")[-1]
         self.toastMessage.emit("error", f"[{short_key.upper()}] {error}")
