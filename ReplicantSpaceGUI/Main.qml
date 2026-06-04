@@ -15,6 +15,14 @@ Window {
 
     property string pinnedBlueprintType: ""
     property int invNextRefresh: 30
+    readonly property var surveyDrones: {
+        var out = []
+        var d = backend.devices
+        for (var i = 0; i < d.length; i++)
+            if ((d[i].device_type || "").indexOf("survey") !== -1)
+                out.push(d[i])
+        return out
+    }
     readonly property bool hasAutofactory: {
         var d = backend.devices
         for (var i = 0; i < d.length; i++)
@@ -229,7 +237,14 @@ Window {
         interval: 1000
         repeat: true
         running: true
-        onTriggered: if (root.invNextRefresh > 0) root.invNextRefresh--
+        onTriggered: {
+            if (root.invNextRefresh > 0) {
+                root.invNextRefresh--
+            } else {
+                backend.fetchInventory()
+                root.invNextRefresh = 30
+            }
+        }
     }
 
     // ── Main body (three-column layout) ─────────────────────────────── //
@@ -303,6 +318,8 @@ Window {
                 ActionBtn { label: "[ PROFILE… ]"; Layout.fillWidth: true; onActivated: profileDlg.open() }
                 Item { height: 4 }
                 ActionBtn { label: "[ REG. WEBHOOK ]"; Layout.fillWidth: true; onActivated: backend.registerWebhook() }
+                Item { height: 4 }
+                ActionBtn { label: "[ FEEDBACK… ]"; Layout.fillWidth: true; onActivated: feedbackDlg.open() }
 
                 Rectangle {
                     visible: root.pinnedBlueprintType !== ""
@@ -507,6 +524,32 @@ Window {
                             width: 115
                             onActivated: { centerPanel.activeTab = "messages"; backend.fetchMessages() }
                         }
+                        ActionBtn {
+                            label: centerPanel.activeTab === "standing" ? "[ STANDING ]" : "  STANDING  "
+                            height: 24
+                            width: 105
+                            onActivated: {
+                                centerPanel.activeTab = "standing"
+                                backend.fetchAchievements()
+                                backend.fetchReputation()
+                            }
+                        }
+                        ActionBtn {
+                            label: centerPanel.activeTab === "galaxy" ? "[ GALAXY ]" : "  GALAXY  "
+                            height: 24
+                            width: 90
+                            onActivated: centerPanel.activeTab = "galaxy"
+                        }
+                        ActionBtn {
+                            label: centerPanel.activeTab === "megastructure" ? "[ MEGASTRUCTURE ]" : "  MEGASTRUCTURE  "
+                            height: 24
+                            width: 145
+                            onActivated: {
+                                centerPanel.activeTab = "megastructure"
+                                backend.fetchMegastructure()
+                                backend.fetchMegastructureLeaderboard()
+                            }
+                        }
                     }
                 }
 
@@ -666,6 +709,57 @@ Window {
                             id: scanContent
                             width: scanFlickable.width
                             spacing: 8
+
+                            // ── Detected Devices ── //
+                            Column {
+                                width: scanContent.width
+                                spacing: 3
+                                visible: backend.scannedDevices.length > 0
+
+                                Text {
+                                    text: "── DETECTED DEVICES (" + backend.scannedDevices.length + ") ─────────────"
+                                    color: theme.txtDim
+                                    font { family: theme.mono; pointSize: 8 }
+                                }
+
+                                RowLayout {
+                                    width: parent.width
+                                    spacing: 0
+                                    Text { text: "TYPE"; color: theme.txtDim; font.family: theme.mono; font.pointSize: 7; Layout.fillWidth: true }
+                                    Text { text: "OWNER"; color: theme.txtDim; font.family: theme.mono; font.pointSize: 7; Layout.preferredWidth: 100 }
+                                    Text { text: "CODE"; color: theme.txtDim; font.family: theme.mono; font.pointSize: 7; Layout.preferredWidth: 80 }
+                                }
+                                Rectangle { width: parent.width; height: 1; color: theme.border }
+
+                                Repeater {
+                                    model: backend.scannedDevices
+                                    RowLayout {
+                                        width: scanContent.width
+                                        spacing: 0
+                                        Text {
+                                            text: (modelData.device_type || "UNKNOWN").replace(/_/g, " ")
+                                            color: theme.txtMid
+                                            font { family: theme.mono; pointSize: 8 }
+                                            elide: Text.ElideRight
+                                            Layout.fillWidth: true
+                                        }
+                                        Text {
+                                            text: modelData.replicant_name || modelData.replicant_code || "NPC"
+                                            color: theme.txtDim
+                                            font { family: theme.mono; pointSize: 7 }
+                                            elide: Text.ElideRight
+                                            Layout.preferredWidth: 100
+                                        }
+                                        Text {
+                                            text: modelData.device_code || "—"
+                                            color: theme.txtDim
+                                            font { family: theme.mono; pointSize: 7 }
+                                            Layout.preferredWidth: 80
+                                        }
+                                    }
+                                }
+                                Rectangle { width: parent.width; height: 1; color: theme.border; opacity: 0.5 }
+                            }
 
                             // ── System Map ── //
                             Column {
@@ -1615,14 +1709,7 @@ Window {
                                         }
 
                                         Repeater {
-                                            model: {
-                                                var drones = []
-                                                var d = backend.devices
-                                                for (var i = 0; i < d.length; i++)
-                                                    if ((d[i].device_type || "").indexOf("survey") !== -1)
-                                                        drones.push(d[i])
-                                                return drones
-                                            }
+                                            model: root.surveyDrones
                                             RowLayout {
                                                 width: planetCol.width
                                                 spacing: 6
@@ -1699,14 +1786,7 @@ Window {
 
                                                 Repeater {
                                                     property var moonData: modelData
-                                                    model: {
-                                                        var drones = []
-                                                        var d = backend.devices
-                                                        for (var i = 0; i < d.length; i++)
-                                                            if ((d[i].device_type || "").indexOf("survey") !== -1)
-                                                                drones.push(d[i])
-                                                        return drones
-                                                    }
+                                                    model: root.surveyDrones
                                                     RowLayout {
                                                         width: planetCol.width
                                                         spacing: 6
@@ -1792,14 +1872,7 @@ Window {
                                         }
 
                                         Repeater {
-                                            model: {
-                                                var drones = []
-                                                var d = backend.devices
-                                                for (var i = 0; i < d.length; i++)
-                                                    if ((d[i].device_type || "").indexOf("survey") !== -1)
-                                                        drones.push(d[i])
-                                                return drones
-                                            }
+                                            model: root.surveyDrones
                                             RowLayout {
                                                 width: beltSurveyCol.width
                                                 spacing: 6
@@ -2987,6 +3060,521 @@ Window {
                         }
                     }
                 }
+
+                // ── Standing tab (achievements + reputation) ── //
+                ColumnLayout {
+                    visible: centerPanel.activeTab === "standing"
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    spacing: 0
+
+                    // toolbar
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 4
+                        Text {
+                            text: "ACHIEVEMENTS & REPUTATION"
+                            color: theme.txtDim
+                            font { family: theme.mono; pointSize: 8 }
+                        }
+                        Item { Layout.fillWidth: true }
+                        ActionBtn {
+                            label: "[ ↺ ]"
+                            width: 36; height: 24
+                            onActivated: { backend.fetchAchievements(); backend.fetchReputation() }
+                        }
+                    }
+
+                    Rectangle { Layout.fillWidth: true; height: 1; color: theme.border }
+
+                    ScrollView {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        clip: true
+                        ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+
+                        ColumnLayout {
+                            width: parent.width
+                            spacing: 12
+
+                            // ─── Achievements ─────────────────────── //
+                            Text {
+                                Layout.topMargin: 8
+                                Layout.leftMargin: 4
+                                text: "── ACHIEVEMENTS"
+                                color: theme.txtDim
+                                font { family: theme.mono; pointSize: 8 }
+                            }
+
+                            Repeater {
+                                model: backend.achievements
+                                delegate: Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.leftMargin: 4
+                                    Layout.rightMargin: 4
+                                    height: achCol.implicitHeight + 12
+                                    color: theme.hover
+                                    border.color: theme.border
+                                    border.width: 1
+
+                                    Column {
+                                        id: achCol
+                                        anchors { left: parent.left; right: parent.right; top: parent.top; margins: 6 }
+                                        spacing: 2
+
+                                        Text {
+                                            width: parent.width
+                                            text: (modelData.name || modelData.title || modelData.achievement || "ACHIEVEMENT").toUpperCase()
+                                            color: theme.txtAccent
+                                            font { family: theme.mono; pointSize: 9; bold: true }
+                                            elide: Text.ElideRight
+                                        }
+                                        Text {
+                                            visible: (modelData.description || "") !== ""
+                                            width: parent.width
+                                            text: modelData.description || ""
+                                            color: theme.txtMid
+                                            font { family: theme.mono; pointSize: 8 }
+                                            wrapMode: Text.WrapAtWordBoundaryOrAnywhere
+                                        }
+                                        Text {
+                                            visible: (modelData.earned_at || modelData.unlocked_at || modelData.achieved_at || "") !== ""
+                                            text: "earned: " + (modelData.earned_at || modelData.unlocked_at || modelData.achieved_at || "")
+                                            color: theme.txtDim
+                                            font { family: theme.mono; pointSize: 7 }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Text {
+                                visible: backend.achievements.length === 0
+                                Layout.leftMargin: 8
+                                text: "no achievements yet"
+                                color: theme.txtDim
+                                font { family: theme.mono; pointSize: 8 }
+                            }
+
+                            // ─── Reputation ───────────────────────── //
+                            Text {
+                                Layout.topMargin: 4
+                                Layout.leftMargin: 4
+                                text: "── REPUTATION"
+                                color: theme.txtDim
+                                font { family: theme.mono; pointSize: 8 }
+                            }
+
+                            Repeater {
+                                model: backend.reputation
+                                delegate: Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.leftMargin: 4
+                                    Layout.rightMargin: 4
+                                    height: repRow.implicitHeight + 12
+                                    color: theme.hover
+                                    border.color: theme.border
+                                    border.width: 1
+
+                                    RowLayout {
+                                        id: repRow
+                                        anchors { left: parent.left; right: parent.right; top: parent.top; margins: 6 }
+                                        spacing: 8
+
+                                        Text {
+                                            text: (modelData.species || modelData.faction ||
+                                                   modelData.name || modelData.entity || "ENTITY").toUpperCase()
+                                            color: theme.txtBright
+                                            font { family: theme.mono; pointSize: 9; bold: true }
+                                            Layout.fillWidth: true
+                                            elide: Text.ElideRight
+                                        }
+                                        Text {
+                                            text: (modelData.level !== undefined ? modelData.level
+                                                   : modelData.value !== undefined ? modelData.value
+                                                   : modelData.score !== undefined ? modelData.score
+                                                   : modelData.reputation !== undefined ? modelData.reputation
+                                                   : "?")
+                                            color: {
+                                                var v = modelData.level !== undefined ? modelData.level
+                                                        : modelData.value !== undefined ? modelData.value
+                                                        : 0
+                                                return v > 0 ? theme.txtAccent : v < 0 ? theme.txtRed : theme.txtDim
+                                            }
+                                            font { family: theme.mono; pointSize: 9; bold: true }
+                                        }
+                                        Text {
+                                            visible: (modelData.label || modelData.tier || modelData.status || "") !== ""
+                                            text: (modelData.label || modelData.tier || modelData.status || "").toUpperCase()
+                                            color: theme.txtDim
+                                            font { family: theme.mono; pointSize: 8 }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Text {
+                                visible: backend.reputation.length === 0
+                                Layout.leftMargin: 8
+                                text: "no reputation data yet"
+                                color: theme.txtDim
+                                font { family: theme.mono; pointSize: 8 }
+                            }
+
+                            Item { height: 8 }
+                        }
+                    }
+                }
+
+                // ── Galaxy directory tab ── //
+                ColumnLayout {
+                    id: galaxyTab
+                    visible: centerPanel.activeTab === "galaxy"
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    spacing: 4
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 6
+
+                        Rectangle {
+                            height: 26
+                            Layout.fillWidth: true
+                            color: theme.bg
+                            border.color: theme.border
+                            border.width: 1
+                            Text {
+                                anchors { fill: parent; leftMargin: 6 }
+                                verticalAlignment: Text.AlignVCenter
+                                text: "search by name…"
+                                color: theme.txtDim
+                                font { family: theme.mono; pointSize: 8 }
+                                visible: galSearchInput.text === ""
+                            }
+                            TextInput {
+                                id: galSearchInput
+                                anchors { fill: parent; leftMargin: 6 }
+                                verticalAlignment: TextInput.AlignVCenter
+                                color: theme.txtBright
+                                font { family: theme.mono; pointSize: 8 }
+                                onAccepted: backend.searchDirectory(text)
+                            }
+                        }
+                        ActionBtn {
+                            label: "[ SEARCH ]"
+                            width: 90; height: 26
+                            onActivated: backend.searchDirectory(galSearchInput.text)
+                        }
+                        ActionBtn {
+                            label: "[ ALL ]"
+                            width: 60; height: 26
+                            onActivated: { galSearchInput.text = ""; backend.searchDirectory("") }
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 0
+                        Text { text: "NAME"; color: theme.txtDim; font.family: theme.mono; font.pointSize: 7; Layout.fillWidth: true }
+                        Text { text: "CODE"; color: theme.txtDim; font.family: theme.mono; font.pointSize: 7; Layout.preferredWidth: 90 }
+                        Text { text: "LOCATION"; color: theme.txtDim; font.family: theme.mono; font.pointSize: 7; Layout.preferredWidth: 110 }
+                        Text { text: "NPC"; color: theme.txtDim; font.family: theme.mono; font.pointSize: 7; Layout.preferredWidth: 36 }
+                    }
+                    Rectangle { Layout.fillWidth: true; height: 1; color: theme.border }
+
+                    ListView {
+                        id: galaxyList
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        model: backend.directory
+                        clip: true
+                        spacing: 0
+
+                        delegate: Rectangle {
+                            width: galaxyList.width
+                            height: 26
+                            color: galRowMa.containsMouse ? theme.hover : "transparent"
+                            Behavior on color { ColorAnimation { duration: 80 } }
+
+                            MouseArea { id: galRowMa; anchors.fill: parent; hoverEnabled: true }
+
+                            RowLayout {
+                                anchors { fill: parent; leftMargin: 2; rightMargin: 2 }
+                                spacing: 0
+                                Text {
+                                    text: modelData.name || "UNNAMED"
+                                    color: theme.txtBright
+                                    font { family: theme.mono; pointSize: 8 }
+                                    elide: Text.ElideRight
+                                    Layout.fillWidth: true
+                                }
+                                Text {
+                                    text: modelData.replicant_code || "—"
+                                    color: theme.txtDim
+                                    font { family: theme.mono; pointSize: 7 }
+                                    Layout.preferredWidth: 90
+                                }
+                                Text {
+                                    text: (modelData.last_location || "—").toUpperCase()
+                                    color: theme.txtDim
+                                    font { family: theme.mono; pointSize: 7 }
+                                    elide: Text.ElideRight
+                                    Layout.preferredWidth: 110
+                                }
+                                Text {
+                                    text: modelData.is_npc ? "YES" : "—"
+                                    color: modelData.is_npc ? theme.txtAmber : theme.txtDim
+                                    font { family: theme.mono; pointSize: 7 }
+                                    Layout.preferredWidth: 36
+                                }
+                            }
+
+                            Rectangle {
+                                anchors.bottom: parent.bottom
+                                width: parent.width; height: 1
+                                color: theme.border; opacity: 0.3
+                            }
+                        }
+
+                        Text {
+                            visible: galaxyList.count === 0
+                            anchors.centerIn: parent
+                            text: "search to browse the galaxy directory"
+                            color: theme.txtDim
+                            font { family: theme.mono; pointSize: 9 }
+                        }
+                    }
+
+                    ActionBtn {
+                        label: "[ LOAD MORE ]"
+                        Layout.fillWidth: true; height: 26
+                        visible: backend.directoryHasMore
+                        onActivated: backend.fetchDirectoryMore()
+                    }
+                }
+
+                // ── Megastructure tab ── //
+                ColumnLayout {
+                    id: megaTab
+                    visible: centerPanel.activeTab === "megastructure"
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    spacing: 4
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 4
+                        Text {
+                            text: "MEGASTRUCTURE"
+                            color: theme.txtDim
+                            font { family: theme.mono; pointSize: 8 }
+                        }
+                        Item { Layout.fillWidth: true }
+                        ActionBtn {
+                            label: "[ ↺ ]"
+                            width: 36; height: 24
+                            onActivated: { backend.fetchMegastructure(); backend.fetchMegastructureLeaderboard() }
+                        }
+                    }
+                    Rectangle { Layout.fillWidth: true; height: 1; color: theme.border }
+
+                    ScrollView {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        clip: true
+                        ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+
+                        ColumnLayout {
+                            width: parent.width
+                            spacing: 10
+
+                            // ── Current megastructure ── //
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                Layout.topMargin: 8
+                                spacing: 6
+                                visible: backend.megastructureData.length > 0
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Text {
+                                        text: "◈ " + ((backend.megastructureData[0] || {}).name || "MEGASTRUCTURE").toUpperCase()
+                                        color: theme.txtAccent
+                                        font { family: theme.mono; pointSize: 11; bold: true }
+                                        Layout.fillWidth: true
+                                        elide: Text.ElideRight
+                                    }
+                                    Text {
+                                        property real prog: (backend.megastructureData[0] || {}).progress || 0
+                                        text: Math.round(prog * 100) + "%"
+                                        color: prog >= 1 ? theme.txtBright : theme.txtAmber
+                                        font { family: theme.mono; pointSize: 11; bold: true }
+                                    }
+                                }
+
+                                // Progress bar
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    height: 12
+                                    color: theme.border
+                                    Rectangle {
+                                        width: parent.width * Math.min(1, (backend.megastructureData[0] || {}).progress || 0)
+                                        height: parent.height
+                                        color: theme.txtMid
+                                        Behavior on width { NumberAnimation { duration: 400 } }
+                                    }
+                                }
+
+                                // Requirements
+                                Text {
+                                    visible: {
+                                        var r = (backend.megastructureData[0] || {}).requirements
+                                        return !!r && (Array.isArray(r) ? r.length > 0 : Object.keys(r).length > 0)
+                                    }
+                                    text: "── REQUIREMENTS"
+                                    color: theme.txtDim
+                                    font { family: theme.mono; pointSize: 8 }
+                                }
+
+                                Repeater {
+                                    model: {
+                                        var m = backend.megastructureData[0] || {}
+                                        var r = m.requirements || {}
+                                        if (Array.isArray(r)) return r
+                                        return Object.keys(r).map(function(k) {
+                                            var v = r[k]
+                                            if (typeof v === "object") return Object.assign({device_type: k}, v)
+                                            return {device_type: k, needed: v, contributed: 0}
+                                        })
+                                    }
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 8
+                                        Text {
+                                            text: (modelData.device_type || "DEVICE").toUpperCase().replace(/_/g, " ")
+                                            color: theme.txtMid
+                                            font { family: theme.mono; pointSize: 8 }
+                                            Layout.fillWidth: true
+                                        }
+                                        Text {
+                                            property int contrib: modelData.contributed || 0
+                                            property int needed: modelData.needed || 0
+                                            text: contrib + " / " + needed
+                                            color: contrib >= needed ? theme.txtBright : theme.txtAmber
+                                            font { family: theme.mono; pointSize: 8 }
+                                        }
+                                    }
+                                }
+
+                                // Contribute section
+                                Rectangle { Layout.fillWidth: true; height: 1; color: theme.border; opacity: 0.6 }
+                                Text {
+                                    text: "── CONTRIBUTE DEVICES"
+                                    color: theme.txtDim
+                                    font { family: theme.mono; pointSize: 8 }
+                                }
+                                Text {
+                                    text: "Enter device codes (comma-separated):"
+                                    color: theme.txtDim
+                                    font { family: theme.mono; pointSize: 8 }
+                                }
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 6
+                                    Rectangle {
+                                        height: 26; Layout.fillWidth: true
+                                        color: theme.bg; border.color: theme.border; border.width: 1
+                                        Text {
+                                            anchors { fill: parent; leftMargin: 6 }
+                                            verticalAlignment: Text.AlignVCenter
+                                            text: "CODE1, CODE2, …"
+                                            color: theme.txtDim
+                                            font { family: theme.mono; pointSize: 8 }
+                                            visible: megDeviceInput.text === ""
+                                        }
+                                        TextInput {
+                                            id: megDeviceInput
+                                            anchors { fill: parent; leftMargin: 6 }
+                                            verticalAlignment: TextInput.AlignVCenter
+                                            color: theme.txtBright
+                                            font { family: theme.mono; pointSize: 8 }
+                                        }
+                                    }
+                                    ActionBtn {
+                                        label: "[ CONTRIBUTE ]"
+                                        width: 120; height: 26
+                                        enabled: megDeviceInput.text.trim() !== ""
+                                        onActivated: {
+                                            var codes = megDeviceInput.text.split(",")
+                                                .map(function(s) { return s.trim() })
+                                                .filter(function(s) { return s.length > 0 })
+                                            backend.contributeToMegastructure(codes)
+                                            megDeviceInput.text = ""
+                                        }
+                                    }
+                                }
+                            }
+
+                            Text {
+                                visible: backend.megastructureData.length === 0
+                                Layout.topMargin: 8
+                                Layout.leftMargin: 4
+                                text: "no megastructure at current location — press ↺ to check"
+                                color: theme.txtDim
+                                font { family: theme.mono; pointSize: 8 }
+                            }
+
+                            // ── Leaderboard ── //
+                            Text {
+                                Layout.topMargin: 4
+                                Layout.leftMargin: 4
+                                text: "── LEADERBOARD"
+                                color: theme.txtDim
+                                font { family: theme.mono; pointSize: 8 }
+                            }
+
+                            Repeater {
+                                model: backend.megastructureLeaderboard
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Layout.leftMargin: 4
+                                    Layout.rightMargin: 4
+                                    spacing: 8
+                                    Text {
+                                        text: "#" + (modelData.rank || (index + 1))
+                                        color: index === 0 ? theme.txtAccent
+                                             : index === 1 ? theme.txtBright
+                                             : theme.txtDim
+                                        font { family: theme.mono; pointSize: 8; bold: index < 3 }
+                                        Layout.preferredWidth: 36
+                                    }
+                                    Text {
+                                        text: modelData.name || modelData.replicant_name || "UNKNOWN"
+                                        color: theme.txtBright
+                                        font { family: theme.mono; pointSize: 8 }
+                                        Layout.fillWidth: true
+                                        elide: Text.ElideRight
+                                    }
+                                    Text {
+                                        text: (modelData.device_count || 0) + " devices"
+                                        color: theme.txtMid
+                                        font { family: theme.mono; pointSize: 8 }
+                                    }
+                                }
+                            }
+
+                            Text {
+                                visible: backend.megastructureLeaderboard.length === 0
+                                Layout.leftMargin: 8
+                                text: "no leaderboard data — press ↺ to load"
+                                color: theme.txtDim
+                                font { family: theme.mono; pointSize: 8 }
+                            }
+
+                            Item { height: 8 }
+                        }
+                    }
+                }
             }
         }
 
@@ -3841,6 +4429,108 @@ Window {
                     height: 26
                     Layout.fillWidth: true
                     onActivated: profileDlg.close()
+                }
+            }
+        }
+    }
+
+    // ── Feedback dialog ──────────────────────────────────────────────── //
+    Rectangle {
+        id: feedbackDlg
+        function open() {
+            feedbackBody.text = ""
+            feedbackTypeIdx = 0
+            visible = true
+            feedbackBody.forceActiveFocus()
+        }
+        function close() { visible = false }
+
+        property int feedbackTypeIdx: 0
+        readonly property var feedbackTypes: ["bug", "idea", "typo"]
+
+        visible: false
+        anchors.centerIn: parent
+        width: 400; height: 260
+        color: "#0b160c"
+        border.color: theme.txtMid
+        border.width: 1
+        z: 50
+        radius: 2
+
+        ColumnLayout {
+            anchors { fill: parent; margins: 16 }
+            spacing: 10
+
+            Text {
+                text: "── SUBMIT FEEDBACK ──────────────"
+                color: theme.txtAccent
+                font { family: theme.mono; pointSize: 9; bold: true }
+            }
+
+            // Type selector
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 4
+                Text { text: "TYPE:"; color: theme.txtDim; font { family: theme.mono; pointSize: 8 } }
+                Repeater {
+                    model: feedbackDlg.feedbackTypes
+                    Rectangle {
+                        height: 24; width: typeLabel.implicitWidth + 18
+                        color: feedbackDlg.feedbackTypeIdx === index ? theme.hover : "transparent"
+                        border.color: feedbackDlg.feedbackTypeIdx === index ? theme.txtMid : theme.border
+                        border.width: 1
+                        Text {
+                            id: typeLabel
+                            anchors.centerIn: parent
+                            text: modelData.toUpperCase()
+                            color: feedbackDlg.feedbackTypeIdx === index ? theme.txtBright : theme.txtMid
+                            font { family: theme.mono; pointSize: 8 }
+                        }
+                        MouseArea { anchors.fill: parent; onClicked: feedbackDlg.feedbackTypeIdx = index }
+                    }
+                }
+            }
+
+            // Body
+            Text { text: "MESSAGE (max 2000 chars):"; color: theme.txtDim; font { family: theme.mono; pointSize: 7 } }
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                color: theme.bg
+                border.color: theme.border
+                border.width: 1
+                Flickable {
+                    anchors { fill: parent; margins: 6 }
+                    contentHeight: feedbackBody.implicitHeight
+                    clip: true
+                    TextEdit {
+                        id: feedbackBody
+                        width: parent.width
+                        color: theme.txtBright
+                        font { family: theme.mono; pointSize: 9 }
+                        selectionColor: theme.txtAccent
+                        wrapMode: TextEdit.WrapAtWordBoundaryOrAnywhere
+                    }
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 6
+                ActionBtn {
+                    label: "[ SEND ]"
+                    height: 26; Layout.fillWidth: true
+                    enabled: feedbackBody.text.trim() !== ""
+                    onActivated: {
+                        backend.submitFeedback(feedbackDlg.feedbackTypes[feedbackDlg.feedbackTypeIdx],
+                                               feedbackBody.text)
+                        feedbackDlg.close()
+                    }
+                }
+                ActionBtn {
+                    label: "[ CANCEL ]"
+                    height: 26; Layout.fillWidth: true
+                    onActivated: feedbackDlg.close()
                 }
             }
         }

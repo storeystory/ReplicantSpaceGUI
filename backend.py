@@ -47,6 +47,12 @@ class Backend(QObject):
     accountReplicantsChanged = Signal()
     locationsOverviewChanged = Signal()
     moonsByPlanetChanged = Signal()
+    achievementsChanged = Signal()
+    reputationChanged = Signal()
+    scannedDevicesChanged = Signal()
+    directoryChanged = Signal()
+    megastructureChanged = Signal()
+    megastructureLeaderboardChanged = Signal()
     scanComplete = Signal()
     statusChanged = Signal()
     errorOccurred = Signal(str)
@@ -65,6 +71,11 @@ class Backend(QObject):
         self._blueprints: list = []
         self._account_replicants: list = []
         self._locations_overview: list = []
+        self._achievements: list = []
+        self._reputation: list = []
+        self._directory: list = []
+        self._directory_cursor = None
+        self._megastructure_leaderboard: list = []
 
         self._live_workers: list = []
 
@@ -76,6 +87,8 @@ class Backend(QObject):
 
         self._dispatch("blueprints", self._client.get_blueprints)
         self._dispatch("account", self._client.get_account)
+        self._dispatch("achievements", self._client.get_achievements)
+        self._dispatch("reputation", self._client.get_reputation)
         if self._code:
             self.refresh()
 
@@ -208,6 +221,34 @@ class Backend(QObject):
     @Property('QVariantList', notify=moonsByPlanetChanged)
     def moonsByPlanet(self) -> list:
         return [{"planet": k, "moons": v} for k, v in self._moons_by_planet.items()]
+
+    @Property('QVariantList', notify=achievementsChanged)
+    def achievements(self) -> list:
+        return self._achievements
+
+    @Property('QVariantList', notify=reputationChanged)
+    def reputation(self) -> list:
+        return self._reputation
+
+    @Property('QVariantList', notify=scannedDevicesChanged)
+    def scannedDevices(self) -> list:
+        return self._scanned_devices
+
+    @Property('QVariantList', notify=directoryChanged)
+    def directory(self) -> list:
+        return self._directory
+
+    @Property(bool, notify=directoryChanged)
+    def directoryHasMore(self) -> bool:
+        return self._directory_cursor is not None and len(self._directory) > 0
+
+    @Property('QVariantList', notify=megastructureChanged)
+    def megastructureData(self) -> list:
+        return [self._megastructure] if self._megastructure else []
+
+    @Property('QVariantList', notify=megastructureLeaderboardChanged)
+    def megastructureLeaderboard(self) -> list:
+        return self._megastructure_leaderboard
 
     @Property(str, notify=statusChanged)
     def status(self) -> str:
@@ -518,6 +559,57 @@ class Backend(QObject):
         self._dispatch("locations_overview", self._client.get_locations)
 
     @Slot()
+    def fetchAchievements(self):
+        self._dispatch("achievements", self._client.get_achievements)
+
+    @Slot()
+    def fetchReputation(self):
+        self._dispatch("reputation", self._client.get_reputation)
+
+    @Slot(str)
+    def searchDirectory(self, name: str):
+        self._directory = []
+        self._directory_cursor = None
+        self.directoryChanged.emit()
+        self._dispatch("directory", self._client.get_replicant_directory,
+                       None, 30, name.strip() or None)
+
+    @Slot()
+    def fetchDirectoryMore(self):
+        if self._directory_cursor is None:
+            return
+        self._dispatch("directory_more", self._client.get_replicant_directory,
+                       self._directory_cursor, 30)
+
+    @Slot(str, str)
+    def submitFeedback(self, feedback_type: str, body: str):
+        if not body.strip():
+            return
+        self._dispatch("action:feedback", self._client.submit_feedback,
+                       feedback_type, body.strip())
+
+    @Slot()
+    def fetchMegastructure(self):
+        loc = self._replicant.get("location", "")
+        if not loc:
+            self.toastMessage.emit("warn", "Location unknown — sync first")
+            return
+        self._dispatch("megastructure", self._client.get_location_megastructures, loc)
+
+    @Slot('QVariantList')
+    def contributeToMegastructure(self, devices: list):
+        loc = self._replicant.get("location", "")
+        if not loc or not devices:
+            return
+        self._dispatch("action:megastructure_contribute",
+                       self._client.contribute_megastructure, loc, list(devices))
+
+    @Slot()
+    def fetchMegastructureLeaderboard(self):
+        self._dispatch("megastructure_leaderboard",
+                       self._client.get_megastructure_leaderboard)
+
+    @Slot()
     def fetchPlanetMoons(self):
         for planet in self._planets:
             if not isinstance(planet, dict):
@@ -635,6 +727,8 @@ class Backend(QObject):
         self._bobnet_messages = []
         self._bobnet_relay_code = ""
         self._moons_by_planet: dict = {}
+        self._scanned_devices: list = []
+        self._megastructure: dict = {}
         self._status = "IDLE"
         if emit:
             for sig in (self.replicantChanged, self.eventsChanged, self.devicesChanged,
@@ -652,6 +746,11 @@ class Backend(QObject):
         if key == "replicant":
             self._replicant = data if isinstance(data, dict) else {}
             self.replicantChanged.emit()
+            # After a switch, refresh() runs before the location is known, so inventory
+            # is skipped. Fetch it now that we have the location.
+            loc = self._replicant.get("location", "")
+            if loc and not self._inventory:
+                self._dispatch("inventory", self._client.get_location_inventory, loc)
         elif key == "events":
             self._events = self._to_list(data)
             self.eventsChanged.emit()
@@ -783,6 +882,32 @@ class Backend(QObject):
                     moons = []
             self._moons_by_planet[desig] = moons
             self.moonsByPlanetChanged.emit()
+        elif key == "achievements":
+            rows: list = []
+            if isinstance(data, list):
+                rows = data
+            elif isinstance(data, dict):
+                for k in ("achievements", "items", "results", "data"):
+                    if k in data and isinstance(data[k], list):
+                        rows = data[k]
+                        break
+            self._achievements = rows
+            self.achievementsChanged.emit()
+        elif key == "reputation":
+            rows2: list = []
+            if isinstance(data, list):
+                rows2 = data
+            elif isinstance(data, dict):
+                for k in ("reputation", "reputations", "items", "results", "data"):
+                    if k in data and isinstance(data[k], list):
+                        rows2 = data[k]
+                        break
+                if not rows2:
+                    # Flat dict {species: level} → list of {name, value}
+                    rows2 = [{"name": k, "value": v} for k, v in data.items()
+                              if not isinstance(v, (dict, list))]
+            self._reputation = rows2
+            self.reputationChanged.emit()
         elif key == "locations_overview":
             raw = data.get("locations", {}) if isinstance(data, dict) else {}
             rows = [
@@ -865,6 +990,70 @@ class Backend(QObject):
             self.fetchInventory()
             QTimer.singleShot(5000, self.fetchInventory)
             self.refresh()
+        elif key == "action:scan_devices":
+            devices = []
+            if isinstance(data, dict):
+                devices = data.get("devices", [])
+            elif isinstance(data, list):
+                devices = data
+            self._scanned_devices = devices
+            self.scannedDevicesChanged.emit()
+            self._set_status("IDLE")
+            n = len(devices)
+            self.toastMessage.emit("info", f"SCAN DEVICES — {n} device{'s' if n != 1 else ''} detected")
+        elif key in ("directory", "directory_more"):
+            replicants: list = []
+            cursor = None
+            if isinstance(data, dict):
+                replicants = data.get("replicants", [])
+                cursor = data.get("next_cursor")
+            elif isinstance(data, list):
+                replicants = data
+            self._directory_cursor = cursor if isinstance(cursor, int) else None
+            if key == "directory":
+                self._directory = replicants
+            else:
+                self._directory = self._directory + replicants
+            self.directoryChanged.emit()
+        elif key == "megastructure":
+            if isinstance(data, list):
+                self._megastructure = data[0] if data else {}
+            elif isinstance(data, dict):
+                for k in ("megastructure",):
+                    if k in data and isinstance(data[k], dict):
+                        self._megastructure = data[k]
+                        break
+                else:
+                    self._megastructure = data if data else {}
+            else:
+                self._megastructure = {}
+            self.megastructureChanged.emit()
+        elif key == "megastructure_leaderboard":
+            rows3: list = []
+            if isinstance(data, list):
+                rows3 = data
+            elif isinstance(data, dict):
+                for k in ("replicants", "entries", "items", "results", "data"):
+                    if k in data and isinstance(data[k], list):
+                        rows3 = data[k]
+                        break
+            self._megastructure_leaderboard = rows3
+            self.megastructureLeaderboardChanged.emit()
+        elif key == "action:megastructure_contribute":
+            self._set_status("IDLE")
+            accepted = data.get("accepted", []) if isinstance(data, dict) else []
+            rejected = data.get("rejected", []) if isinstance(data, dict) else []
+            progress = data.get("progress") if isinstance(data, dict) else None
+            msg = f"CONTRIBUTED {len(accepted)}"
+            if rejected:
+                msg += f" ({len(rejected)} REJECTED)"
+            if progress is not None:
+                msg += f" — {int(progress * 100)}% COMPLETE"
+            self.toastMessage.emit("info", msg)
+            self.fetchMegastructure()
+        elif key == "action:feedback":
+            self._set_status("IDLE")
+            self.toastMessage.emit("info", "FEEDBACK RECEIVED — thank you")
         elif key.startswith("action:"):
             action = key.split(":", 1)[1]
             self._set_status("IDLE")
@@ -876,6 +1065,17 @@ class Backend(QObject):
         if key == "asteroids":
             self._asteroids = []
             self.asteroidsChanged.emit()
+            return
+        # Moon lookups fail silently — not all planets expose moon detail
+        if key.startswith("planet_moons:"):
+            desig = key.split(":", 1)[1]
+            self._moons_by_planet.setdefault(desig, [])
+            self.moonsByPlanetChanged.emit()
+            return
+        # Megastructure lookup fails silently — not all locations have one
+        if key == "megastructure":
+            self._megastructure = {}
+            self.megastructureChanged.emit()
             return
         self._set_status("ERROR")
         short_key = key.split(":")[-1]

@@ -39,8 +39,17 @@ class ApiClient:
     def scan(self, code: str) -> dict:
         return self._post(f"/replicants/{code}/scan")
 
-    def scan_devices(self, code: str) -> list:
+    def scan_devices(self, code: str) -> dict:
         return self._get(f"/replicants/{code}/scan/devices")
+
+    def get_replicant_directory(self, cursor: int | None = None,
+                                limit: int = 30, name: str | None = None) -> dict:
+        params: dict = {"limit": limit}
+        if cursor is not None:
+            params["cursor"] = cursor
+        if name:
+            params["name"] = name
+        return self._get("/replicants", params)
 
     def travel(self, code: str, destination: str, dry_run: bool = False) -> dict:
         body: dict = {"destination": destination}
@@ -79,7 +88,16 @@ class ApiClient:
     def get_blueprints(self) -> list:
         return self._get("/blueprints")
 
+    def get_achievements(self) -> dict:
+        return self._get("/account/achievements")
+
+    def get_reputation(self) -> dict:
+        return self._get("/accounts/reputation")
+
     # --- Account actions ---
+
+    def submit_feedback(self, feedback_type: str, body: str) -> dict:
+        return self._post("/feedback", {"type": feedback_type, "body": body})
 
     def register_webhook(self, url: str) -> dict:
         return self._post("/accounts/webhook", {"url": url})
@@ -102,6 +120,15 @@ class ApiClient:
         if location:
             params["location"] = location
         return self._get("/inventory", params or None)
+
+    def get_location_megastructures(self, location_code: str) -> dict:
+        return self._get(f"/locations/{location_code}/megastructures")
+
+    def contribute_megastructure(self, location_code: str, devices: list) -> dict:
+        return self._post(f"/locations/{location_code}/contribute", {"devices": devices})
+
+    def get_megastructure_leaderboard(self) -> dict:
+        return self._get("/leaderboards/megastructure")
 
     def get_location_asteroids(self, location_code: str) -> list:
         return self._get(f"/locations/{location_code}/asteroids")
