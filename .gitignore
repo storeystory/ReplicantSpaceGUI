@@ -72,6 +72,9 @@ CMakeLists.txt.user*
 # Game credentials - never commit
 config.json
 
+# Build output
+/deployment/
+
 # Binaries
 # --------
 *.dll
