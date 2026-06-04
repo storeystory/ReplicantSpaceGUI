@@ -571,6 +571,11 @@ class Backend(QObject):
 
     @Slot(int)
     def markMessageRead(self, message_id: int):
+        # Optimistic removal — message disappears immediately without waiting for re-fetch
+        self._messages = [m for m in self._messages if m.get("id") != message_id]
+        self._unread_count = max(0, self._unread_count - 1)
+        self.messagesChanged.emit()
+        self.unreadCountChanged.emit()
         self._dispatch("action:mark_read", self._client.mark_messages_read, [message_id])
 
     @Slot(str)
@@ -849,7 +854,7 @@ class Backend(QObject):
             self.messagesChanged.emit()
             self.unreadCountChanged.emit()
         elif key == "action:mark_read":
-            self._dispatch("messages", self._client.get_messages, 50)
+            self._dispatch("messages", self._client.get_messages, 200, True)
         elif key == "action:cancel_print":
             self._set_status("IDLE")
             self.toastMessage.emit("info", "PRINT CANCELLED")

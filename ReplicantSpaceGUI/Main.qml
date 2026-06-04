@@ -1710,13 +1710,13 @@ Window {
                                                     RowLayout {
                                                         width: planetCol.width
                                                         spacing: 6
-                                                        leftPadding: 12
                                                         Text {
                                                             text: (modelData.device_type || "DRONE").toUpperCase().replace(/_/g, " ")
                                                                   + "  " + (modelData.device_code || "")
                                                             color: theme.txtDim
                                                             font { family: theme.mono; pointSize: 8 }
                                                             Layout.fillWidth: true
+                                                            Layout.leftMargin: 12
                                                         }
                                                         ActionBtn {
                                                             property string moonDesig: parent.parent.moonData.designation || parent.parent.moonData.name || ""
@@ -1873,7 +1873,7 @@ Window {
                         }
                     }
 
-                    // Column headers
+                    // Column headers — widths must match delegate row exactly
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 0
@@ -1887,31 +1887,36 @@ Window {
                             text: "DEV"
                             color: theme.txtDim
                             font { family: theme.mono; pointSize: 7 }
-                            width: 38
+                            Layout.preferredWidth: 40
+                            horizontalAlignment: Text.AlignRight
                         }
                         Text {
                             text: "REP"
                             color: theme.txtDim
                             font { family: theme.mono; pointSize: 7 }
-                            width: 38
+                            Layout.preferredWidth: 40
+                            horizontalAlignment: Text.AlignRight
                         }
                         Text {
                             text: "RES"
                             color: theme.txtDim
                             font { family: theme.mono; pointSize: 7 }
-                            width: 38
+                            Layout.preferredWidth: 40
+                            horizontalAlignment: Text.AlignRight
                         }
                         Text {
                             text: "SITES"
                             color: theme.txtDim
                             font { family: theme.mono; pointSize: 7 }
-                            width: 38
+                            Layout.preferredWidth: 44
+                            horizontalAlignment: Text.AlignRight
                         }
                         Text {
                             text: "EVT"
                             color: theme.txtDim
                             font { family: theme.mono; pointSize: 7 }
-                            width: 32
+                            Layout.preferredWidth: 36
+                            horizontalAlignment: Text.AlignRight
                         }
                     }
                     Rectangle { Layout.fillWidth: true; height: 1; color: theme.border }
@@ -1943,7 +1948,7 @@ Window {
                             }
 
                             RowLayout {
-                                anchors { fill: parent; leftMargin: 2; rightMargin: 2 }
+                                anchors { fill: parent }
                                 spacing: 0
 
                                 Text {
@@ -1954,34 +1959,39 @@ Window {
                                     elide: Text.ElideRight
                                 }
                                 Text {
-                                    text: (modelData.devices || 0) + "    "
+                                    text: (modelData.devices || 0) + ""
                                     color: (modelData.devices || 0) > 0 ? theme.txtAccent : theme.txtDim
                                     font { family: theme.mono; pointSize: 8 }
-                                    width: 38
+                                    Layout.preferredWidth: 40
+                                    horizontalAlignment: Text.AlignRight
                                 }
                                 Text {
-                                    text: (modelData.replicants || 0) + "    "
+                                    text: (modelData.replicants || 0) + ""
                                     color: (modelData.replicants || 0) > 0 ? theme.txtBright : theme.txtDim
                                     font { family: theme.mono; pointSize: 8 }
-                                    width: 38
+                                    Layout.preferredWidth: 40
+                                    horizontalAlignment: Text.AlignRight
                                 }
                                 Text {
-                                    text: (modelData.resources || 0) + "    "
+                                    text: (modelData.resources || 0) + ""
                                     color: theme.txtDim
                                     font { family: theme.mono; pointSize: 8 }
-                                    width: 38
+                                    Layout.preferredWidth: 40
+                                    horizontalAlignment: Text.AlignRight
                                 }
                                 Text {
-                                    text: (modelData.resource_sites || 0) + "    "
+                                    text: (modelData.resource_sites || 0) + ""
                                     color: theme.txtDim
                                     font { family: theme.mono; pointSize: 8 }
-                                    width: 38
+                                    Layout.preferredWidth: 44
+                                    horizontalAlignment: Text.AlignRight
                                 }
                                 Text {
                                     text: (modelData.location_events || 0) + ""
                                     color: (modelData.location_events || 0) > 0 ? theme.txtAmber : theme.txtDim
                                     font { family: theme.mono; pointSize: 8 }
-                                    width: 32
+                                    Layout.preferredWidth: 36
+                                    horizontalAlignment: Text.AlignRight
                                 }
                             }
                         }
@@ -2905,7 +2915,7 @@ Window {
                         Layout.fillHeight: true
                         model: backend.messages.filter(function(m) {
                             return !m.read && !m.read_at
-                        })
+                        }).sort(function(a, b) { return (b.id || 0) - (a.id || 0) })
                         clip: true
                         spacing: 4
 
