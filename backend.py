@@ -114,6 +114,26 @@ class Backend(QObject):
     def hostDevice(self) -> str:
         return self._replicant.get("hosted_device_code", "—")
 
+    @Property(str, notify=replicantChanged)
+    def replicantPronouns(self) -> str:
+        return self._replicant.get("pronouns", "")
+
+    @Property(str, notify=replicantChanged)
+    def replicantDescription(self) -> str:
+        return self._replicant.get("description", "")
+
+    @Property(str, notify=replicantChanged)
+    def replicantPlan(self) -> str:
+        return self._replicant.get("plan", "")
+
+    @Property(str, notify=replicantChanged)
+    def replicantProject(self) -> str:
+        return self._replicant.get("project", "")
+
+    @Property(bool, notify=replicantChanged)
+    def replicantIsNpc(self) -> bool:
+        return bool(self._replicant.get("is_npc", False))
+
     @Property('QVariantList', notify=eventsChanged)
     def events(self) -> list:
         return self._events
@@ -470,6 +490,27 @@ class Backend(QObject):
     def deviceCommandWithTarget(self, device_code: str, command: str, target: str):
         self._dispatch(f"action:cmd:{device_code}", self._client.device_command,
                        device_code, command, {"target": target} if target else None)
+
+    @Slot(str, str, str, str, str, bool)
+    def configureReplicant(self, name: str, pronouns: str, description: str,
+                           plan: str, project: str, is_npc: bool):
+        body: dict = {
+            "name": name,
+            "pronouns": pronouns,
+            "description": description,
+            "plan": plan,
+            "project": project,
+            "is_npc": is_npc,
+        }
+        self._set_status("SAVING PROFILE…")
+        self._dispatch("action:configure_replicant", self._client.configure_replicant,
+                       self._code, body)
+
+    @Slot(str)
+    def decommissionDevice(self, device_code: str):
+        self._set_status("DECOMMISSIONING…")
+        self._dispatch("action:decommission", self._client.device_command,
+                       device_code, "decommission")
 
     @Slot()
     def fetchTraders(self):

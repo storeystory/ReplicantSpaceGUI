@@ -57,6 +57,9 @@ class ApiClient:
     def replicate(self, code: str) -> dict:
         return self._post(f"/replicants/{code}/replicate")
 
+    def configure_replicant(self, code: str, body: dict) -> dict:
+        return self._patch(f"/replicants/{code}", body)
+
     def stop_mine(self, code: str) -> dict:
         return self._delete(f"/replicants/{code}/mine")
 

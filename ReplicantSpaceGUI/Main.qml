@@ -15,6 +15,12 @@ Window {
 
     property string pinnedBlueprintType: ""
     property int invNextRefresh: 30
+    readonly property bool hasAutofactory: {
+        var d = backend.devices
+        for (var i = 0; i < d.length; i++)
+            if ((d[i].device_type || "").indexOf("autofactory") !== -1) return true
+        return false
+    }
     property var pinnedBlueprintData: {
         if (!pinnedBlueprintType) return null
         for (var i = 0; i < backend.blueprints.length; i++) {
@@ -288,6 +294,8 @@ Window {
                     Layout.topMargin: 10; Layout.bottomMargin: 10
                 }
 
+                ActionBtn { label: "[ PROFILE… ]"; Layout.fillWidth: true; onActivated: profileDlg.open() }
+                Item { height: 4 }
                 ActionBtn { label: "[ REG. WEBHOOK ]"; Layout.fillWidth: true; onActivated: backend.registerWebhook() }
 
                 Rectangle {
@@ -2899,6 +2907,18 @@ Window {
                     border.color: theme.border
                     border.width: 1
 
+                    MouseArea {
+                        anchors.fill: parent
+                        acceptedButtons: Qt.RightButton
+                        onClicked: (mouse) => {
+                            if (!root.hasAutofactory) return
+                            deviceContextMenu.targetCode = modelData.device_code || ""
+                            deviceContextMenu.targetName = (modelData.device_type || "device")
+                                .toUpperCase().replace(/_/g, " ")
+                            deviceContextMenu.popup()
+                        }
+                    }
+
                     ColumnLayout {
                         anchors { fill: parent; margins: 8 }
                         spacing: 3
@@ -3213,6 +3233,340 @@ Window {
                 }
             }
             } // ScrollView
+        }
+    }
+
+    // ── Profile edit dialog ───────────────────────────────────────────── //
+
+    Rectangle {
+        id: profileDlg
+        property bool editIsNpc: false
+
+        function open() {
+            editIsNpc = backend.replicantIsNpc
+            profileName.text        = backend.replicantName === "—" ? "" : backend.replicantName
+            profilePronouns.text    = backend.replicantPronouns
+            profileDescription.text = backend.replicantDescription
+            profilePlan.text        = backend.replicantPlan
+            profileProject.text     = backend.replicantProject
+            profileFlick.contentY   = 0
+            visible = true
+            profileName.forceActiveFocus()
+        }
+        function close() { visible = false }
+
+        visible: false
+        anchors.centerIn: parent
+        width: 440; height: 560
+        color: "#0b160c"
+        border.color: theme.txtMid
+        border.width: 1
+        z: 50
+        radius: 2
+
+        ColumnLayout {
+            anchors { fill: parent; margins: 16 }
+            spacing: 8
+
+            Text {
+                text: "── EDIT PROFILE ─────────────────"
+                color: theme.txtAccent
+                font { family: theme.mono; pointSize: 9; bold: true }
+            }
+
+            Flickable {
+                id: profileFlick
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                clip: true
+                contentHeight: profileForm.implicitHeight
+                flickableDirection: Flickable.VerticalFlick
+
+                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+
+                Column {
+                    id: profileForm
+                    width: profileFlick.width - 12
+                    spacing: 10
+
+                    // ── Name ──
+                    Column {
+                        width: parent.width
+                        spacing: 3
+                        Text {
+                            text: "NAME"
+                            color: theme.txtDim
+                            font { family: theme.mono; pointSize: 7 }
+                        }
+                        Rectangle {
+                            width: parent.width; height: 28
+                            color: "#060c07"; border.color: theme.border; border.width: 1
+                            TextInput {
+                                id: profileName
+                                anchors { left: parent.left; right: parent.right; leftMargin: 8; rightMargin: 8; verticalCenter: parent.verticalCenter }
+                                color: theme.txtBright
+                                font { family: theme.mono; pointSize: 9 }
+                                selectionColor: theme.txtAccent
+                                selectByMouse: true
+                                Keys.onReturnPressed: profilePronouns.forceActiveFocus()
+                            }
+                        }
+                    }
+
+                    // ── Pronouns ──
+                    Column {
+                        width: parent.width
+                        spacing: 3
+                        RowLayout {
+                            width: parent.width
+                            Text {
+                                text: "PRONOUNS"
+                                color: theme.txtDim
+                                font { family: theme.mono; pointSize: 7 }
+                                Layout.fillWidth: true
+                            }
+                            Text {
+                                text: profilePronouns.length + "/50"
+                                color: profilePronouns.length > 50 ? theme.txtRed : theme.txtDim
+                                font { family: theme.mono; pointSize: 7 }
+                            }
+                        }
+                        Rectangle {
+                            width: parent.width; height: 28
+                            color: "#060c07"; border.color: theme.border; border.width: 1
+                            TextInput {
+                                id: profilePronouns
+                                anchors { left: parent.left; right: parent.right; leftMargin: 8; rightMargin: 8; verticalCenter: parent.verticalCenter }
+                                color: theme.txtBright
+                                font { family: theme.mono; pointSize: 9 }
+                                selectionColor: theme.txtAccent
+                                selectByMouse: true
+                                Keys.onReturnPressed: profileDescription.forceActiveFocus()
+                            }
+                        }
+                    }
+
+                    // ── NPC toggle ──
+                    RowLayout {
+                        width: parent.width
+                        Text {
+                            text: "NPC CHARACTER"
+                            color: theme.txtDim
+                            font { family: theme.mono; pointSize: 7 }
+                            Layout.fillWidth: true
+                        }
+                        ActionBtn {
+                            label: profileDlg.editIsNpc ? "[ YES ]" : "[  NO ]"
+                            width: 60; height: 22
+                            onActivated: profileDlg.editIsNpc = !profileDlg.editIsNpc
+                        }
+                    }
+
+                    // ── Description ──
+                    Column {
+                        width: parent.width
+                        spacing: 3
+                        RowLayout {
+                            width: parent.width
+                            Text {
+                                text: "DESCRIPTION"
+                                color: theme.txtDim
+                                font { family: theme.mono; pointSize: 7 }
+                                Layout.fillWidth: true
+                            }
+                            Text {
+                                text: profileDescription.length + "/500"
+                                color: profileDescription.length > 500 ? theme.txtRed : theme.txtDim
+                                font { family: theme.mono; pointSize: 7 }
+                            }
+                        }
+                        Rectangle {
+                            width: parent.width; height: 80
+                            color: "#060c07"; border.color: theme.border; border.width: 1
+                            TextEdit {
+                                id: profileDescription
+                                anchors { fill: parent; margins: 6 }
+                                color: theme.txtBright
+                                font { family: theme.mono; pointSize: 8 }
+                                selectionColor: theme.txtAccent
+                                selectByMouse: true
+                                wrapMode: TextEdit.Wrap
+                            }
+                        }
+                    }
+
+                    // ── Plan ──
+                    Column {
+                        width: parent.width
+                        spacing: 3
+                        RowLayout {
+                            width: parent.width
+                            Text {
+                                text: "PLAN  (short-term)"
+                                color: theme.txtDim
+                                font { family: theme.mono; pointSize: 7 }
+                                Layout.fillWidth: true
+                            }
+                            Text {
+                                text: profilePlan.length + "/500"
+                                color: profilePlan.length > 500 ? theme.txtRed : theme.txtDim
+                                font { family: theme.mono; pointSize: 7 }
+                            }
+                        }
+                        Rectangle {
+                            width: parent.width; height: 80
+                            color: "#060c07"; border.color: theme.border; border.width: 1
+                            TextEdit {
+                                id: profilePlan
+                                anchors { fill: parent; margins: 6 }
+                                color: theme.txtBright
+                                font { family: theme.mono; pointSize: 8 }
+                                selectionColor: theme.txtAccent
+                                selectByMouse: true
+                                wrapMode: TextEdit.Wrap
+                            }
+                        }
+                    }
+
+                    // ── Project ──
+                    Column {
+                        width: parent.width
+                        spacing: 3
+                        RowLayout {
+                            width: parent.width
+                            Text {
+                                text: "PROJECT  (long-term)"
+                                color: theme.txtDim
+                                font { family: theme.mono; pointSize: 7 }
+                                Layout.fillWidth: true
+                            }
+                            Text {
+                                text: profileProject.length + "/2000"
+                                color: profileProject.length > 2000 ? theme.txtRed : theme.txtDim
+                                font { family: theme.mono; pointSize: 7 }
+                            }
+                        }
+                        Rectangle {
+                            width: parent.width; height: 120
+                            color: "#060c07"; border.color: theme.border; border.width: 1
+                            TextEdit {
+                                id: profileProject
+                                anchors { fill: parent; margins: 6 }
+                                color: theme.txtBright
+                                font { family: theme.mono; pointSize: 8 }
+                                selectionColor: theme.txtAccent
+                                selectByMouse: true
+                                wrapMode: TextEdit.Wrap
+                            }
+                        }
+                    }
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                ActionBtn {
+                    label: "[ SAVE ]"
+                    height: 26
+                    Layout.fillWidth: true
+                    enabled: profileName.text.trim().length > 0
+                             && profilePronouns.length <= 50
+                             && profileDescription.length <= 500
+                             && profilePlan.length <= 500
+                             && profileProject.length <= 2000
+                    onActivated: {
+                        backend.configureReplicant(
+                            profileName.text.trim(),
+                            profilePronouns.text,
+                            profileDescription.text,
+                            profilePlan.text,
+                            profileProject.text,
+                            profileDlg.editIsNpc
+                        )
+                        profileDlg.close()
+                    }
+                }
+                ActionBtn {
+                    label: "[ CANCEL ]"
+                    height: 26
+                    Layout.fillWidth: true
+                    onActivated: profileDlg.close()
+                }
+            }
+        }
+    }
+
+    // ── Device context menu ───────────────────────────────────────────── //
+
+    Menu {
+        id: deviceContextMenu
+        property string targetCode: ""
+        property string targetName: ""
+
+        MenuItem {
+            text: "Decommission " + deviceContextMenu.targetName + "…"
+            onTriggered: {
+                decommissionConfirmDlg.deviceCode = deviceContextMenu.targetCode
+                decommissionConfirmDlg.deviceName = deviceContextMenu.targetName
+                decommissionConfirmDlg.open()
+            }
+        }
+    }
+
+    Rectangle {
+        id: decommissionConfirmDlg
+        property string deviceCode: ""
+        property string deviceName: ""
+        function open()  { visible = true }
+        function close() { visible = false }
+
+        visible: false
+        anchors.centerIn: parent
+        width: 380; height: 160
+        color: "#0b160c"
+        border.color: theme.txtAmber
+        border.width: 1
+        z: 50
+        radius: 2
+
+        ColumnLayout {
+            anchors { fill: parent; margins: 16 }
+            spacing: 10
+
+            Text {
+                text: "DECOMMISSION " + decommissionConfirmDlg.deviceName + "?"
+                color: theme.txtAmber
+                font { family: theme.mono; pointSize: 10; bold: true }
+                elide: Text.ElideRight
+                Layout.fillWidth: true
+            }
+            Text {
+                text: "Device will travel to nearest autofactory.\n~60% of materials recovered. Cannot be undone."
+                color: theme.txtMid
+                font { family: theme.mono; pointSize: 8 }
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                ActionBtn {
+                    label: "[ CONFIRM ]"
+                    height: 26
+                    Layout.fillWidth: true
+                    onActivated: {
+                        backend.decommissionDevice(decommissionConfirmDlg.deviceCode)
+                        decommissionConfirmDlg.close()
+                    }
+                }
+                ActionBtn {
+                    label: "[ CANCEL ]"
+                    height: 26
+                    Layout.fillWidth: true
+                    onActivated: decommissionConfirmDlg.close()
+                }
+            }
         }
     }
 
