@@ -21,7 +21,7 @@ icon = /home/storey/.local/share/pipx/venvs/pyside6-essentials/lib/python3.14/si
 [python]
 
 # python path
-python_path = /home/storey/.local/share/pipx/venvs/pyside6-essentials/bin/python
+python_path = /mnt/STRG/Proj/ReplicantSpaceGUI/.qtcreator/Python_3_14_5venv/bin/python
 
 # python packages to install
 packages = Nuitka==4.1.2
