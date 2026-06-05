@@ -463,7 +463,104 @@ class Backend(QObject):
         self._set_status("SETTING BELT SEARCH…")
         self._dispatch("action:ami_directive", self._client.device_command,
                        controller_code, "set_directive",
-                       {"directive": "belt_search", "configuration": {}})
+                       {"directive": "belt_search"})
+
+    @Slot(str, str, str, str, str, str)
+    def amiGatherResources(self, controller_code: str, carbon: str, conductive: str,
+                           rares: str, silicates: str, structural: str):
+        config = {}
+        for name, val in [("carbon", carbon), ("conductive", conductive), ("rares", rares),
+                           ("silicates", silicates), ("structural", structural)]:
+            if val.strip():
+                try:
+                    config[name] = int(val.strip())
+                except ValueError:
+                    pass
+        self._set_status("SETTING GATHER RESOURCES DIRECTIVE…")
+        self._dispatch("action:ami_directive", self._client.device_command,
+                       controller_code, "set_directive",
+                       {"directive": "gather_resources", "configuration": config})
+
+    @Slot(str)
+    def amiGatherEvenly(self, controller_code: str):
+        self._set_status("SETTING GATHER EVENLY DIRECTIVE…")
+        self._dispatch("action:ami_directive", self._client.device_command,
+                       controller_code, "set_directive",
+                       {"directive": "gather_evenly"})
+
+    @Slot(str, str, str, str, str, str)
+    def amiMaintainRatios(self, controller_code: str, carbon: str, conductive: str,
+                          rares: str, silicates: str, structural: str):
+        config = {}
+        for name, val in [("carbon", carbon), ("conductive", conductive), ("rares", rares),
+                           ("silicates", silicates), ("structural", structural)]:
+            if val.strip():
+                try:
+                    config[name] = float(val.strip())
+                except ValueError:
+                    pass
+        self._set_status("SETTING MAINTAIN RATIOS DIRECTIVE…")
+        self._dispatch("action:ami_directive", self._client.device_command,
+                       controller_code, "set_directive",
+                       {"directive": "maintain_ratios", "configuration": config})
+
+    @Slot(str)
+    def amiDepleteSmallest(self, controller_code: str):
+        self._set_status("SETTING DEPLETE SMALLEST DIRECTIVE…")
+        self._dispatch("action:ami_directive", self._client.device_command,
+                       controller_code, "set_directive",
+                       {"directive": "deplete_smallest"})
+
+    @Slot(str, str, bool)
+    def amiGatherSalvage(self, controller_code: str, location: str, recall: bool):
+        self._set_status("SETTING GATHER SALVAGE DIRECTIVE…")
+        self._dispatch("action:ami_directive", self._client.device_command,
+                       controller_code, "set_directive",
+                       {"directive": "gather_salvage",
+                        "configuration": {"location": location.strip(), "recall": recall}})
+
+    @Slot(str, str, str, str)
+    def amiShuttle(self, controller_code: str, collect: str, deliver: str, priority: str):
+        pri = [p.strip() for p in priority.split(",") if p.strip()]
+        self._set_status("SETTING SHUTTLE DIRECTIVE…")
+        self._dispatch("action:ami_directive", self._client.device_command,
+                       controller_code, "set_directive",
+                       {"directive": "shuttle",
+                        "configuration": {"collect": collect.strip(), "deliver": deliver.strip(), "priority": pri}})
+
+    @Slot(str, str, str, str)
+    def amiFerry(self, controller_code: str, collect: str, deliver: str, priority: str):
+        pri = [p.strip() for p in priority.split(",") if p.strip()]
+        self._set_status("SETTING FERRY DIRECTIVE…")
+        self._dispatch("action:ami_directive", self._client.device_command,
+                       controller_code, "set_directive",
+                       {"directive": "ferry",
+                        "configuration": {"collect": collect.strip(), "deliver": deliver.strip(), "priority": pri}})
+
+    @Slot(str, str, str)
+    def amiConsolidate(self, controller_code: str, deliver: str, priority: str):
+        pri = [p.strip() for p in priority.split(",") if p.strip()]
+        self._set_status("SETTING CONSOLIDATE DIRECTIVE…")
+        self._dispatch("action:ami_directive", self._client.device_command,
+                       controller_code, "set_directive",
+                       {"directive": "consolidate",
+                        "configuration": {"deliver": deliver.strip(), "priority": pri}})
+
+    @Slot(str, str, str, str, str)
+    def amiDelivery(self, controller_code: str, collect: str, deliver: str, resource: str, amount: str):
+        try:
+            amt = int(amount.strip())
+        except (ValueError, AttributeError):
+            self.toastMessage.emit("warn", "Amount must be a whole number")
+            return
+        self._set_status("SETTING DELIVERY DIRECTIVE…")
+        self._dispatch("action:ami_directive", self._client.device_command,
+                       controller_code, "set_directive",
+                       {"directive": "delivery",
+                        "configuration": {
+                            "route": {"collect": collect.strip(), "deliver": deliver.strip()},
+                            "requirement": {resource.strip(): amt}
+                        }})
 
     # ── BobNet slots ─────────────────────────────────────────────────────── #
 

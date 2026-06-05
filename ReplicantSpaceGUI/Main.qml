@@ -1754,6 +1754,7 @@ Window {
                                             Column {
                                                 width: planetCol.width
                                                 spacing: 3
+                                                property var moonData: modelData
 
                                                 Rectangle {
                                                     width: parent.width; height: 1
@@ -1785,7 +1786,6 @@ Window {
                                                 }
 
                                                 Repeater {
-                                                    property var moonData: modelData
                                                     model: root.surveyDrones
                                                     RowLayout {
                                                         width: planetCol.width
@@ -2091,7 +2091,8 @@ Window {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         model: backend.devices.filter(function(d) {
-                            return (d.device_type || "").indexOf("controller") !== -1
+                            var t = d.device_type || ""
+                            return t.indexOf("controller") !== -1 || t.indexOf("ami_") === 0
                         })
                         clip: true
                         spacing: 8
@@ -2099,6 +2100,8 @@ Window {
                         delegate: Rectangle {
                             id: ctrlDelegate
                             property var ctrl: modelData
+                            property string ctrlStatus: (modelData.status || "").toLowerCase()
+                            property bool ctrlStowed: ctrlStatus === "stowed"
                             width: controllerList.width
                             color: theme.hover
                             border.color: theme.border
@@ -2226,6 +2229,55 @@ Window {
                                         label: "[ BELT SEARCH ]"
                                         Layout.fillWidth: true; height: 24
                                         onActivated: backend.amiBeltSearch(modelData.device_code)
+                                    }
+                                }
+
+                                // Directives (fleet controller only)
+                                RowLayout {
+                                    width: parent.width
+                                    spacing: 4
+                                    visible: (modelData.device_type || "").indexOf("fleet") !== -1
+                                    ActionBtn {
+                                        label: "[ TRAVEL… ]"
+                                        Layout.fillWidth: true; height: 24
+                                        onActivated: {
+                                            deviceTravelDialog.deviceCode = modelData.device_code
+                                            deviceTravelDialog.open()
+                                        }
+                                    }
+                                }
+
+                                // Directives (mining controller only)
+                                RowLayout {
+                                    width: parent.width
+                                    spacing: 4
+                                    visible: (modelData.device_type || "").indexOf("mining") !== -1
+                                    ActionBtn {
+                                        label: "[ SET DIRECTIVE… ]"
+                                        Layout.fillWidth: true; height: 24
+                                        onActivated: {
+                                            amiMiningDlg.controllerCode = modelData.device_code
+                                            amiMiningDlg.directiveType = "gather_evenly"
+                                            amiMiningDlg.reset()
+                                            amiMiningDlg.visible = true
+                                        }
+                                    }
+                                }
+
+                                // Directives (transport controller only)
+                                RowLayout {
+                                    width: parent.width
+                                    spacing: 4
+                                    visible: (modelData.device_type || "").indexOf("transport") !== -1
+                                    ActionBtn {
+                                        label: "[ SET DIRECTIVE… ]"
+                                        Layout.fillWidth: true; height: 24
+                                        onActivated: {
+                                            amiTransportDlg.controllerCode = modelData.device_code
+                                            amiTransportDlg.directiveType = "shuttle"
+                                            amiTransportDlg.reset()
+                                            amiTransportDlg.visible = true
+                                        }
                                     }
                                 }
                             }
@@ -3959,8 +4011,6 @@ Window {
 
                             ActionBtn {
                                 visible: (modelData.device_type || "").indexOf("vessel") === -1
-                                         && (modelData.device_type || "").indexOf("transport") === -1
-                                         && (modelData.device_type || "").indexOf("controller") === -1
                                          && (modelData.device_type || "").indexOf("hub") === -1
                                 label: devCard.devStatus === "stowed" ? "[ DEPLOY ]" : "[ STOW ]"
                                 Layout.fillWidth: true
@@ -5719,6 +5769,488 @@ Window {
                     label: "[ CANCEL ]"
                     width: 90; height: 28
                     onActivated: amiSurveyDlg.visible = false
+                }
+            }
+        }
+    }
+
+    // AMI — mining controller directive config
+    Rectangle {
+        id: amiMiningDlg
+        property string controllerCode: ""
+        property string directiveType: "gather_evenly"
+        property bool salvageRecall: true
+        property bool showResources: directiveType === "gather_resources" || directiveType === "maintain_ratios"
+        property string resourceHint: directiveType === "maintain_ratios" ? "e.g. 0.25" : "e.g. 100"
+
+        function reset() {
+            mcCarbon.text = ""; mcConductive.text = ""; mcRares.text = ""
+            mcSilicates.text = ""; mcStructural.text = ""; mcSalvageLoc.text = ""
+            salvageRecall = true
+        }
+
+        visible: false
+        anchors.centerIn: parent
+        width: 380
+        height: mcBody.implicitHeight + 32
+        color: "#0b160c"
+        border.color: theme.txtMid
+        border.width: 1
+        z: 50
+        radius: 2
+
+        Column {
+            id: mcBody
+            anchors { left: parent.left; right: parent.right; top: parent.top; margins: 16 }
+            spacing: 10
+
+            Text {
+                text: "MINING DIRECTIVE"
+                color: theme.txtAccent
+                font { family: theme.mono; pointSize: 10; bold: true }
+            }
+
+            Text { text: "TYPE:"; color: theme.txtDim; font.family: theme.mono; font.pointSize: 8 }
+            RowLayout {
+                width: parent.width; spacing: 4
+                ActionBtn {
+                    label: amiMiningDlg.directiveType === "gather_resources" ? "[ RESOURCES ]" : "  RESOURCES  "
+                    Layout.fillWidth: true; height: 26
+                    onActivated: amiMiningDlg.directiveType = "gather_resources"
+                }
+                ActionBtn {
+                    label: amiMiningDlg.directiveType === "gather_evenly" ? "[ EVENLY ]" : "  EVENLY  "
+                    Layout.fillWidth: true; height: 26
+                    onActivated: amiMiningDlg.directiveType = "gather_evenly"
+                }
+                ActionBtn {
+                    label: amiMiningDlg.directiveType === "maintain_ratios" ? "[ RATIOS ]" : "  RATIOS  "
+                    Layout.fillWidth: true; height: 26
+                    onActivated: amiMiningDlg.directiveType = "maintain_ratios"
+                }
+                ActionBtn {
+                    label: amiMiningDlg.directiveType === "deplete_smallest" ? "[ DEPLETE ]" : "  DEPLETE  "
+                    Layout.fillWidth: true; height: 26
+                    onActivated: amiMiningDlg.directiveType = "deplete_smallest"
+                }
+                ActionBtn {
+                    label: amiMiningDlg.directiveType === "gather_salvage" ? "[ SALVAGE ]" : "  SALVAGE  "
+                    Layout.fillWidth: true; height: 26
+                    onActivated: amiMiningDlg.directiveType = "gather_salvage"
+                }
+            }
+
+            // Resource fields (gather_resources / maintain_ratios)
+            Text {
+                visible: amiMiningDlg.showResources
+                text: "CARBON:"; color: theme.txtDim; font.family: theme.mono; font.pointSize: 8
+            }
+            Rectangle {
+                visible: amiMiningDlg.showResources
+                width: parent.width; height: 28
+                color: "#060c07"; border.color: theme.border; border.width: 1
+                Text {
+                    anchors.fill: parent; anchors.leftMargin: 8
+                    verticalAlignment: Text.AlignVCenter
+                    text: amiMiningDlg.resourceHint; color: theme.txtDim
+                    font.family: theme.mono; font.pointSize: 9
+                    visible: mcCarbon.text === ""
+                }
+                TextInput {
+                    id: mcCarbon
+                    anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 8
+                    verticalAlignment: TextInput.AlignVCenter; color: theme.txtBright
+                    font.family: theme.mono; font.pointSize: 9
+                    Keys.onEscapePressed: amiMiningDlg.visible = false
+                }
+            }
+
+            Text {
+                visible: amiMiningDlg.showResources
+                text: "CONDUCTIVE:"; color: theme.txtDim; font.family: theme.mono; font.pointSize: 8
+            }
+            Rectangle {
+                visible: amiMiningDlg.showResources
+                width: parent.width; height: 28
+                color: "#060c07"; border.color: theme.border; border.width: 1
+                Text {
+                    anchors.fill: parent; anchors.leftMargin: 8
+                    verticalAlignment: Text.AlignVCenter
+                    text: amiMiningDlg.resourceHint; color: theme.txtDim
+                    font.family: theme.mono; font.pointSize: 9
+                    visible: mcConductive.text === ""
+                }
+                TextInput {
+                    id: mcConductive
+                    anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 8
+                    verticalAlignment: TextInput.AlignVCenter; color: theme.txtBright
+                    font.family: theme.mono; font.pointSize: 9
+                    Keys.onEscapePressed: amiMiningDlg.visible = false
+                }
+            }
+
+            Text {
+                visible: amiMiningDlg.showResources
+                text: "RARES:"; color: theme.txtDim; font.family: theme.mono; font.pointSize: 8
+            }
+            Rectangle {
+                visible: amiMiningDlg.showResources
+                width: parent.width; height: 28
+                color: "#060c07"; border.color: theme.border; border.width: 1
+                Text {
+                    anchors.fill: parent; anchors.leftMargin: 8
+                    verticalAlignment: Text.AlignVCenter
+                    text: amiMiningDlg.resourceHint; color: theme.txtDim
+                    font.family: theme.mono; font.pointSize: 9
+                    visible: mcRares.text === ""
+                }
+                TextInput {
+                    id: mcRares
+                    anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 8
+                    verticalAlignment: TextInput.AlignVCenter; color: theme.txtBright
+                    font.family: theme.mono; font.pointSize: 9
+                    Keys.onEscapePressed: amiMiningDlg.visible = false
+                }
+            }
+
+            Text {
+                visible: amiMiningDlg.showResources
+                text: "SILICATES:"; color: theme.txtDim; font.family: theme.mono; font.pointSize: 8
+            }
+            Rectangle {
+                visible: amiMiningDlg.showResources
+                width: parent.width; height: 28
+                color: "#060c07"; border.color: theme.border; border.width: 1
+                Text {
+                    anchors.fill: parent; anchors.leftMargin: 8
+                    verticalAlignment: Text.AlignVCenter
+                    text: amiMiningDlg.resourceHint; color: theme.txtDim
+                    font.family: theme.mono; font.pointSize: 9
+                    visible: mcSilicates.text === ""
+                }
+                TextInput {
+                    id: mcSilicates
+                    anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 8
+                    verticalAlignment: TextInput.AlignVCenter; color: theme.txtBright
+                    font.family: theme.mono; font.pointSize: 9
+                    Keys.onEscapePressed: amiMiningDlg.visible = false
+                }
+            }
+
+            Text {
+                visible: amiMiningDlg.showResources
+                text: "STRUCTURAL:"; color: theme.txtDim; font.family: theme.mono; font.pointSize: 8
+            }
+            Rectangle {
+                visible: amiMiningDlg.showResources
+                width: parent.width; height: 28
+                color: "#060c07"; border.color: theme.border; border.width: 1
+                Text {
+                    anchors.fill: parent; anchors.leftMargin: 8
+                    verticalAlignment: Text.AlignVCenter
+                    text: amiMiningDlg.resourceHint; color: theme.txtDim
+                    font.family: theme.mono; font.pointSize: 9
+                    visible: mcStructural.text === ""
+                }
+                TextInput {
+                    id: mcStructural
+                    anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 8
+                    verticalAlignment: TextInput.AlignVCenter; color: theme.txtBright
+                    font.family: theme.mono; font.pointSize: 9
+                    Keys.onEscapePressed: amiMiningDlg.visible = false
+                }
+            }
+
+            // Salvage fields
+            Text {
+                visible: amiMiningDlg.directiveType === "gather_salvage"
+                text: "SALVAGE SITE LOCATION:"; color: theme.txtDim; font.family: theme.mono; font.pointSize: 8
+            }
+            Rectangle {
+                visible: amiMiningDlg.directiveType === "gather_salvage"
+                width: parent.width; height: 28
+                color: "#060c07"; border.color: theme.border; border.width: 1
+                Text {
+                    anchors.fill: parent; anchors.leftMargin: 8
+                    verticalAlignment: Text.AlignVCenter
+                    text: "e.g. SOL-3-L4"; color: theme.txtDim
+                    font.family: theme.mono; font.pointSize: 9
+                    visible: mcSalvageLoc.text === ""
+                }
+                TextInput {
+                    id: mcSalvageLoc
+                    anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 8
+                    verticalAlignment: TextInput.AlignVCenter; color: theme.txtBright
+                    font.family: theme.mono; font.pointSize: 9
+                    Keys.onEscapePressed: amiMiningDlg.visible = false
+                }
+            }
+            Text {
+                visible: amiMiningDlg.directiveType === "gather_salvage"
+                text: "RECALL WHEN DONE:"; color: theme.txtDim; font.family: theme.mono; font.pointSize: 8
+            }
+            RowLayout {
+                visible: amiMiningDlg.directiveType === "gather_salvage"
+                width: parent.width; spacing: 4
+                ActionBtn {
+                    label: amiMiningDlg.salvageRecall ? "[ YES ]" : "  YES  "
+                    Layout.fillWidth: true; height: 26
+                    onActivated: amiMiningDlg.salvageRecall = true
+                }
+                ActionBtn {
+                    label: !amiMiningDlg.salvageRecall ? "[ NO ]" : "  NO  "
+                    Layout.fillWidth: true; height: 26
+                    onActivated: amiMiningDlg.salvageRecall = false
+                }
+            }
+
+            RowLayout {
+                width: parent.width; spacing: 6
+                ActionBtn {
+                    label: "[ SET DIRECTIVE ]"
+                    Layout.fillWidth: true; height: 28
+                    onActivated: {
+                        var code = amiMiningDlg.controllerCode
+                        var dt = amiMiningDlg.directiveType
+                        if (dt === "gather_resources")
+                            backend.amiGatherResources(code, mcCarbon.text, mcConductive.text,
+                                                       mcRares.text, mcSilicates.text, mcStructural.text)
+                        else if (dt === "gather_evenly")
+                            backend.amiGatherEvenly(code)
+                        else if (dt === "maintain_ratios")
+                            backend.amiMaintainRatios(code, mcCarbon.text, mcConductive.text,
+                                                      mcRares.text, mcSilicates.text, mcStructural.text)
+                        else if (dt === "deplete_smallest")
+                            backend.amiDepleteSmallest(code)
+                        else if (dt === "gather_salvage")
+                            backend.amiGatherSalvage(code, mcSalvageLoc.text, amiMiningDlg.salvageRecall)
+                        amiMiningDlg.visible = false
+                    }
+                }
+                ActionBtn {
+                    label: "[ CANCEL ]"
+                    width: 90; height: 28
+                    onActivated: amiMiningDlg.visible = false
+                }
+            }
+        }
+    }
+
+    // AMI — transport controller directive config
+    Rectangle {
+        id: amiTransportDlg
+        property string controllerCode: ""
+        property string directiveType: "shuttle"
+
+        function reset() {
+            tcCollect.text = ""
+            tcDeliver.text = ""
+            tcPriority.text = ""
+            tcResource.text = ""
+            tcAmount.text = ""
+        }
+
+        visible: false
+        anchors.centerIn: parent
+        width: 380
+        height: tcBody.implicitHeight + 32
+        color: "#0b160c"
+        border.color: theme.txtMid
+        border.width: 1
+        z: 50
+        radius: 2
+
+        Column {
+            id: tcBody
+            anchors { left: parent.left; right: parent.right; top: parent.top; margins: 16 }
+            spacing: 10
+
+            Text {
+                text: "TRANSPORT DIRECTIVE"
+                color: theme.txtAccent
+                font { family: theme.mono; pointSize: 10; bold: true }
+            }
+
+            Text { text: "TYPE:"; color: theme.txtDim; font.family: theme.mono; font.pointSize: 8 }
+            RowLayout {
+                width: parent.width; spacing: 4
+                ActionBtn {
+                    label: amiTransportDlg.directiveType === "shuttle" ? "[ SHUTTLE ]" : "  SHUTTLE  "
+                    Layout.fillWidth: true; height: 26
+                    onActivated: amiTransportDlg.directiveType = "shuttle"
+                }
+                ActionBtn {
+                    label: amiTransportDlg.directiveType === "ferry" ? "[ FERRY ]" : "  FERRY  "
+                    Layout.fillWidth: true; height: 26
+                    onActivated: amiTransportDlg.directiveType = "ferry"
+                }
+                ActionBtn {
+                    label: amiTransportDlg.directiveType === "consolidate" ? "[ CONSOLIDATE ]" : "  CONSOLIDATE  "
+                    Layout.fillWidth: true; height: 26
+                    onActivated: amiTransportDlg.directiveType = "consolidate"
+                }
+                ActionBtn {
+                    label: amiTransportDlg.directiveType === "delivery" ? "[ DELIVERY ]" : "  DELIVERY  "
+                    Layout.fillWidth: true; height: 26
+                    onActivated: amiTransportDlg.directiveType = "delivery"
+                }
+            }
+
+            // Collect (not for consolidate)
+            Text {
+                visible: amiTransportDlg.directiveType !== "consolidate"
+                text: "COLLECT LOCATION:"
+                color: theme.txtDim
+                font { family: theme.mono; pointSize: 8 }
+            }
+            Rectangle {
+                visible: amiTransportDlg.directiveType !== "consolidate"
+                width: parent.width; height: 30
+                color: "#060c07"; border.color: theme.border; border.width: 1
+                Text {
+                    anchors { fill: parent; leftMargin: 8; rightMargin: 8 }
+                    verticalAlignment: Text.AlignVCenter
+                    text: "e.g. SOL-BELT-1"
+                    color: theme.txtDim; font.family: theme.mono; font.pointSize: 9
+                    visible: tcCollect.text === ""
+                }
+                TextInput {
+                    id: tcCollect
+                    anchors { fill: parent; leftMargin: 8; rightMargin: 8 }
+                    verticalAlignment: TextInput.AlignVCenter
+                    color: theme.txtBright; font.family: theme.mono; font.pointSize: 9
+                    Keys.onEscapePressed: amiTransportDlg.visible = false
+                }
+            }
+
+            // Deliver (always shown)
+            Text {
+                text: "DELIVER LOCATION:"
+                color: theme.txtDim
+                font { family: theme.mono; pointSize: 8 }
+            }
+            Rectangle {
+                width: parent.width; height: 30
+                color: "#060c07"; border.color: theme.border; border.width: 1
+                Text {
+                    anchors { fill: parent; leftMargin: 8; rightMargin: 8 }
+                    verticalAlignment: Text.AlignVCenter
+                    text: "e.g. SOL-3-L4"
+                    color: theme.txtDim; font.family: theme.mono; font.pointSize: 9
+                    visible: tcDeliver.text === ""
+                }
+                TextInput {
+                    id: tcDeliver
+                    anchors { fill: parent; leftMargin: 8; rightMargin: 8 }
+                    verticalAlignment: TextInput.AlignVCenter
+                    color: theme.txtBright; font.family: theme.mono; font.pointSize: 9
+                    Keys.onEscapePressed: amiTransportDlg.visible = false
+                }
+            }
+
+            // Priority (shuttle / ferry / consolidate)
+            Text {
+                visible: amiTransportDlg.directiveType !== "delivery"
+                text: "PRIORITY (optional, comma-separated):"
+                color: theme.txtDim
+                font { family: theme.mono; pointSize: 8 }
+            }
+            Rectangle {
+                visible: amiTransportDlg.directiveType !== "delivery"
+                width: parent.width; height: 30
+                color: "#060c07"; border.color: theme.border; border.width: 1
+                Text {
+                    anchors { fill: parent; leftMargin: 8; rightMargin: 8 }
+                    verticalAlignment: Text.AlignVCenter
+                    text: "e.g. carbon, rares"
+                    color: theme.txtDim; font.family: theme.mono; font.pointSize: 9
+                    visible: tcPriority.text === ""
+                }
+                TextInput {
+                    id: tcPriority
+                    anchors { fill: parent; leftMargin: 8; rightMargin: 8 }
+                    verticalAlignment: TextInput.AlignVCenter
+                    color: theme.txtBright; font.family: theme.mono; font.pointSize: 9
+                    Keys.onEscapePressed: amiTransportDlg.visible = false
+                }
+            }
+
+            // Resource + amount (delivery only)
+            Text {
+                visible: amiTransportDlg.directiveType === "delivery"
+                text: "RESOURCE TYPE:"
+                color: theme.txtDim
+                font { family: theme.mono; pointSize: 8 }
+            }
+            Rectangle {
+                visible: amiTransportDlg.directiveType === "delivery"
+                width: parent.width; height: 30
+                color: "#060c07"; border.color: theme.border; border.width: 1
+                Text {
+                    anchors { fill: parent; leftMargin: 8; rightMargin: 8 }
+                    verticalAlignment: Text.AlignVCenter
+                    text: "e.g. carbon"
+                    color: theme.txtDim; font.family: theme.mono; font.pointSize: 9
+                    visible: tcResource.text === ""
+                }
+                TextInput {
+                    id: tcResource
+                    anchors { fill: parent; leftMargin: 8; rightMargin: 8 }
+                    verticalAlignment: TextInput.AlignVCenter
+                    color: theme.txtBright; font.family: theme.mono; font.pointSize: 9
+                    Keys.onEscapePressed: amiTransportDlg.visible = false
+                }
+            }
+            Text {
+                visible: amiTransportDlg.directiveType === "delivery"
+                text: "AMOUNT:"
+                color: theme.txtDim
+                font { family: theme.mono; pointSize: 8 }
+            }
+            Rectangle {
+                visible: amiTransportDlg.directiveType === "delivery"
+                width: parent.width; height: 30
+                color: "#060c07"; border.color: theme.border; border.width: 1
+                Text {
+                    anchors { fill: parent; leftMargin: 8; rightMargin: 8 }
+                    verticalAlignment: Text.AlignVCenter
+                    text: "e.g. 100"
+                    color: theme.txtDim; font.family: theme.mono; font.pointSize: 9
+                    visible: tcAmount.text === ""
+                }
+                TextInput {
+                    id: tcAmount
+                    anchors { fill: parent; leftMargin: 8; rightMargin: 8 }
+                    verticalAlignment: TextInput.AlignVCenter
+                    color: theme.txtBright; font.family: theme.mono; font.pointSize: 9
+                    inputMethodHints: Qt.ImhDigitsOnly
+                    Keys.onEscapePressed: amiTransportDlg.visible = false
+                }
+            }
+
+            RowLayout {
+                width: parent.width; spacing: 6
+                ActionBtn {
+                    label: "[ SET DIRECTIVE ]"
+                    Layout.fillWidth: true; height: 28
+                    onActivated: {
+                        var code = amiTransportDlg.controllerCode
+                        var dt = amiTransportDlg.directiveType
+                        if (dt === "shuttle")
+                            backend.amiShuttle(code, tcCollect.text, tcDeliver.text, tcPriority.text)
+                        else if (dt === "ferry")
+                            backend.amiFerry(code, tcCollect.text, tcDeliver.text, tcPriority.text)
+                        else if (dt === "consolidate")
+                            backend.amiConsolidate(code, tcDeliver.text, tcPriority.text)
+                        else if (dt === "delivery")
+                            backend.amiDelivery(code, tcCollect.text, tcDeliver.text, tcResource.text, tcAmount.text)
+                        amiTransportDlg.visible = false
+                    }
+                }
+                ActionBtn {
+                    label: "[ CANCEL ]"
+                    width: 90; height: 28
+                    onActivated: amiTransportDlg.visible = false
                 }
             }
         }
