@@ -1166,7 +1166,14 @@ Window {
                                 ActionBtn {
                                     label: "[ PRINT ]"
                                     width: 72; height: 24
-                                    onActivated: backend.printDevice(modelData.device_type || "")
+                                    onActivated: {
+                                        var dtype = modelData.device_type || ""
+                                        if (root.hasAutofactory) {
+                                            bpPrintDialog.open(dtype)
+                                        } else {
+                                            backend.printDevice(dtype)
+                                        }
+                                    }
                                 }
                                 ActionBtn {
                                     label: root.pinnedBlueprintType === (modelData.device_type || "")
@@ -4972,6 +4979,149 @@ Window {
         heading: "PRINT DEVICE"
         placeholder: "device type (e.g. mining_drone)"
         onConfirmed: (val) => { if (val.trim()) backend.printDevice(val.trim()) }
+    }
+
+    // Blueprint print dialog — choose Heaven Vessel or an autofactory
+    Rectangle {
+        id: bpPrintDialog
+        property string deviceType: ""
+        property string pendingAfCode: ""
+
+        function open(dtype) {
+            deviceType = dtype
+            pendingAfCode = ""
+            bpAfController.text = ""
+            bpAfTravel.text = ""
+            visible = true
+        }
+
+        visible: false
+        anchors.centerIn: parent
+        width: 380
+        height: bpPrintBody.implicitHeight + 32
+        color: "#0b160c"
+        border.color: theme.txtMid; border.width: 1
+        z: 50; radius: 2
+
+        Column {
+            id: bpPrintBody
+            anchors { left: parent.left; right: parent.right; top: parent.top; margins: 16 }
+            spacing: 10
+
+            Text {
+                text: "PRINT  " + bpPrintDialog.deviceType.toUpperCase().replace(/_/g, " ")
+                color: theme.txtAccent
+                font { family: theme.mono; pointSize: 10; bold: true }
+                elide: Text.ElideRight
+                width: parent.width
+            }
+
+            // Heaven Vessel
+            ActionBtn {
+                label: "[ HEAVEN VESSEL ]"
+                width: parent.width; height: 28
+                onActivated: {
+                    backend.printDevice(bpPrintDialog.deviceType)
+                    bpPrintDialog.visible = false
+                }
+            }
+
+            // One button per autofactory
+            Repeater {
+                model: backend.devices.filter(function(d) {
+                    return (d.device_type || "").indexOf("autofactory") !== -1
+                })
+                ActionBtn {
+                    property string afLabel: (modelData.device_type || "AUTOFACTORY").toUpperCase().replace(/_/g, " ")
+                                            + "  " + (modelData.device_code || "")
+                                            + (modelData.location ? "  @" + modelData.location : "")
+                    label: bpPrintDialog.pendingAfCode === modelData.device_code
+                           ? "[ " + afLabel + " ▸ ]" : "[ " + afLabel + " ]"
+                    width: bpPrintBody.width; height: 28
+                    onActivated: {
+                        if (bpPrintDialog.pendingAfCode === modelData.device_code) {
+                            // second tap confirms with current optional fields
+                            backend.printToAutofactory(modelData.device_code,
+                                bpPrintDialog.deviceType, bpAfController.text, bpAfTravel.text)
+                            bpPrintDialog.visible = false
+                        } else {
+                            bpPrintDialog.pendingAfCode = modelData.device_code
+                        }
+                    }
+                }
+            }
+
+            // Optional fields shown after selecting an autofactory
+            Column {
+                visible: bpPrintDialog.pendingAfCode !== ""
+                width: parent.width
+                spacing: 6
+
+                Text {
+                    text: "ASSIGN TO CONTROLLER (optional):"
+                    color: theme.txtDim
+                    font { family: theme.mono; pointSize: 8 }
+                }
+                Rectangle {
+                    width: parent.width; height: 28
+                    color: "#060c07"; border.color: theme.border; border.width: 1
+                    Text {
+                        anchors { fill: parent; leftMargin: 8 }
+                        verticalAlignment: Text.AlignVCenter
+                        text: "e.g. MC91FF22"
+                        color: theme.txtDim; font { family: theme.mono; pointSize: 9 }
+                        visible: bpAfController.text === ""
+                    }
+                    TextInput {
+                        id: bpAfController
+                        anchors { fill: parent; leftMargin: 8; rightMargin: 8 }
+                        verticalAlignment: TextInput.AlignVCenter
+                        color: theme.txtBright; font { family: theme.mono; pointSize: 9 }
+                        Keys.onEscapePressed: bpPrintDialog.visible = false
+                    }
+                }
+
+                Text {
+                    text: "TRAVEL TO AFTER PRINT (optional):"
+                    color: theme.txtDim
+                    font { family: theme.mono; pointSize: 8 }
+                }
+                Rectangle {
+                    width: parent.width; height: 28
+                    color: "#060c07"; border.color: theme.border; border.width: 1
+                    Text {
+                        anchors { fill: parent; leftMargin: 8 }
+                        verticalAlignment: Text.AlignVCenter
+                        text: "e.g. LERNA-BELT-1"
+                        color: theme.txtDim; font { family: theme.mono; pointSize: 9 }
+                        visible: bpAfTravel.text === ""
+                    }
+                    TextInput {
+                        id: bpAfTravel
+                        anchors { fill: parent; leftMargin: 8; rightMargin: 8 }
+                        verticalAlignment: TextInput.AlignVCenter
+                        color: theme.txtBright; font { family: theme.mono; pointSize: 9 }
+                        Keys.onEscapePressed: bpPrintDialog.visible = false
+                    }
+                }
+
+                ActionBtn {
+                    label: "[ CONFIRM AUTOFACTORY PRINT ]"
+                    width: parent.width; height: 28
+                    onActivated: {
+                        backend.printToAutofactory(bpPrintDialog.pendingAfCode,
+                            bpPrintDialog.deviceType, bpAfController.text, bpAfTravel.text)
+                        bpPrintDialog.visible = false
+                    }
+                }
+            }
+
+            ActionBtn {
+                label: "[ CANCEL ]"
+                width: parent.width; height: 28
+                onActivated: bpPrintDialog.visible = false
+            }
+        }
     }
 
     InputDialog {

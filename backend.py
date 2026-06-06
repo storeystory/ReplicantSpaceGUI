@@ -308,6 +308,18 @@ class Backend(QObject):
         self._set_status(f"PRINTING {blueprint}…")
         self._dispatch("action:print", self._client.print_device, self._code, blueprint)
 
+    @Slot(str, str, str, str)
+    def printToAutofactory(self, autofactory_code: str, device_type: str,
+                           controller: str, travel_dest: str):
+        self._set_status(f"QUEUING {device_type} IN AUTOFACTORY…")
+        body: dict = {"device_type": device_type}
+        if controller.strip():
+            body["controller"] = controller.strip().upper()
+        if travel_dest.strip():
+            body["oncomplete"] = {"command": "travel", "destination": travel_dest.strip().upper()}
+        self._dispatch("action:print_autofactory", self._client.device_command,
+                       autofactory_code, "enqueue_print", body)
+
     @Slot(str, str)
     def travelDevice(self, device_code: str, destination: str):
         self._set_status(f"DRONE {device_code} → {destination}…")
